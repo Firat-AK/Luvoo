@@ -1,0 +1,166 @@
+# 📱 Luvoo – Flutter + Firebase MVP PRD
+
+**Platform:** Flutter (mobile)  
+**Backend:** Firebase (Auth, Firestore, Storage)  
+**Author:** Fred  
+**Date:** June 2025
+
+---
+
+## 1. Objective
+
+Luvoo is a dating app focused on meaningful connections. This MVP will implement user auth, profile setup, feed-based discovery, match system, and chat. Development will be assisted using Cursor.
+
+---
+
+## 2. MVP Scope
+
+### Must-Have Features
+- Firebase email/password signup/login
+- Profile setup: photo, name, age, bio, gender
+- Discovery feed (no swipe, scrollable list)
+- Like/comment on profile elements
+- Auto match creation when like is mutual
+- 1-on-1 chat between matched users
+- Simple admin view (web or Firebase console)
+
+---
+
+## 3. Tech Stack
+
+### Frontend
+- Flutter (Dart)
+- Riverpod or Bloc (state management)
+- GoRouter (routing)
+- Firebase packages: `firebase_auth`, `cloud_firestore`, `firebase_storage`
+
+### Backend
+- Firebase Auth
+- Firestore (NoSQL DB)
+- Firebase Storage (images)
+- Firebase Functions (optional)
+
+---
+
+## 4. Firestore Data Model
+
+### `users/{uid}`
+```json
+{
+  "id": "uid",
+  "email": "test@luvoo.app",
+  "name": "Alice",
+  "bio": "Love hiking",
+  "gender": "female",
+  "birthday": "1997-04-23",
+  "photoUrl": "...",
+  "createdAt": Timestamp
+}
+```
+
+### `prompts/{promptId}`
+```json
+{
+  "userId": "uid",
+  "text": "What’s your idea of a perfect date?",
+  "answer": "Taco truck + stargazing"
+}
+```
+
+### `likes/{uid}/liked/{targetId}`
+```json
+{
+  "fromUserId": "uid",
+  "toUserId": "targetId",
+  "comment": "Nice smile!",
+  "timestamp": Timestamp
+}
+```
+
+### `matches/{matchId}`
+```json
+{
+  "userA": "uid",
+  "userB": "targetId",
+  "createdAt": Timestamp
+}
+```
+
+### `messages/{matchId}/messages/{messageId}`
+```json
+{
+  "senderId": "uid",
+  "text": "Hey!",
+  "timestamp": Timestamp
+}
+```
+
+---
+
+## 5. Screens (Flutter)
+
+- `SplashScreen`: Auto login or redirect
+- `LoginScreen`: Email/password login
+- `RegisterScreen`: Sign-up with basic info
+- `ProfileSetupScreen`: Upload image, fill bio, birthday, gender
+- `DiscoveryFeedScreen`: Scrollable list of other users
+- `ProfileDetailScreen`: Like + optional comment
+- `ChatListScreen`: Show matched users
+- `ChatScreen`: Show conversation
+- `AdminDashboard`: (Optional for Firebase Console)
+
+---
+
+## 6. Match Flow
+
+1. User A likes User B (saved under `likes`)
+2. System checks if User B already liked User A
+3. If yes, create `matches/{matchId}` and open chat
+4. Notify both users (local snackbar or in-app toast)
+
+---
+
+## 7. Success Metrics
+
+- >70% profile completion
+- 1+ match per user per day
+- 5+ min avg session length
+- 90% crash-free sessions
+
+---
+
+## 8. Folder Structure (Cursor / Flutter)
+
+```
+lib/
+├── core/
+│   ├── constants/
+│   ├── services/         # firebase_service.dart, auth_service.dart
+│   └── widgets/          # reusable buttons, cards
+├── features/
+│   ├── auth/             # login, register
+│   ├── profile/          # setup, view
+│   ├── discovery/        # feed, like
+│   ├── chat/             # chat UI
+│   └── admin/            # optional
+├── models/               # user_model.dart, message_model.dart
+├── routes/               # app_router.dart
+└── main.dart
+```
+
+---
+
+## 9. Cursor Notes
+
+- Place Firebase logic in `core/services/`
+- Use modular `features/*/screens` and `features/*/logic`
+- Scaffold with dummy `UserModel` and `FirestoreService`
+- Ask Cursor to write Firestore `query()`s and `set()`s based on model
+
+---
+
+## 10. Deliverables
+
+- Flutter project (modular folder structure)
+- Firebase project connected (Auth, Firestore, Storage)
+- Testable MVP APK (Android) or iOS build (TestFlight)
