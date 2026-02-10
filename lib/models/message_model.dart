@@ -21,13 +21,14 @@ Timestamp _dateTimeToTimestamp(DateTime dateTime) => Timestamp.fromDate(dateTime
 class MessageModel with _$MessageModel {
   const factory MessageModel({
     required String id,
-    String? matchId, // Eski sistem için (opsiyonel)
-    String? chatId,  // Yeni chat sistemi için (opsiyonel)
+    String? matchId,
+    String? chatId,
     required String senderId,
     required String text,
     @JsonKey(fromJson: _dateTimeFromTimestamp, toJson: _dateTimeToTimestamp)
     required DateTime timestamp,
     @Default(false) bool isRead,
+    String? imageUrl,
   }) = _MessageModel;
 
   factory MessageModel.fromJson(Map<String, dynamic> json) =>

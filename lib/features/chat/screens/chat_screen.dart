@@ -1,7 +1,10 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:luvoo/core/services/firebase_service.dart';
-import 'package:luvoo/core/widgets/app_text_field.dart';
 import 'package:luvoo/features/auth/providers/auth_provider.dart';
 import 'package:luvoo/models/message_model.dart';
 import 'package:luvoo/models/user_model.dart';
@@ -10,6 +13,14 @@ import 'package:intl/intl.dart';
 
 final messagesProvider = StreamProvider.family<List<MessageModel>, String>((ref, chatId) {
   return ref.watch(firebaseServiceProvider).getChatMessages(chatId);
+});
+
+final typingProvider = StreamProvider.family<Map<String, DateTime>, String>((ref, chatId) {
+  return ref.watch(firebaseServiceProvider).getChatTyping(chatId);
+});
+
+final lastReadByProvider = StreamProvider.family<Map<String, DateTime>, String>((ref, chatId) {
+  return ref.watch(firebaseServiceProvider).getChatLastReadBy(chatId);
 });
 
 final chatUsersProvider = FutureProvider.family<List<UserModel?>, String>((ref, chatId) async {
@@ -39,10 +50,56 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  final _imagePicker = ImagePicker();
   bool _isLoading = false;
+  bool _isUploadingPhoto = false;
+  bool _didMarkRead = false;
+  Timer? _typingDebounce;
+  static const _typingDebounceDuration = Duration(seconds: 2);
+
+  Future<void> _pickAndSendImage() async {
+    final currentUser = ref.read(authProvider).value;
+    if (currentUser == null) return;
+    try {
+      final xFile = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+      if (xFile == null || !mounted) return;
+      final file = File(xFile.path);
+      setState(() => _isUploadingPhoto = true);
+      await ref.read(firebaseServiceProvider).sendChatPhoto(widget.chatId, currentUser.id, file);
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingPhoto = false);
+    }
+  }
+
+  void _onTypingChanged() {
+    final currentUser = ref.read(authProvider).value;
+    if (currentUser == null) return;
+    _typingDebounce?.cancel();
+    final text = _messageController.text.trim();
+    if (text.isEmpty) {
+      ref.read(firebaseServiceProvider).setTyping(widget.chatId, currentUser.id, false);
+      return;
+    }
+    ref.read(firebaseServiceProvider).setTyping(widget.chatId, currentUser.id, true);
+    _typingDebounce = Timer(_typingDebounceDuration, () {
+      ref.read(firebaseServiceProvider).setTyping(widget.chatId, currentUser.id, false);
+    });
+  }
 
   @override
   void dispose() {
+    _typingDebounce?.cancel();
+    final currentUser = ref.read(authProvider).value;
+    if (currentUser != null) {
+      ref.read(firebaseServiceProvider).setTyping(widget.chatId, currentUser.id, false);
+    }
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -58,6 +115,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     setState(() => _isLoading = true);
 
     try {
+      await ref.read(firebaseServiceProvider).setTyping(widget.chatId, currentUser.id, false);
       await ref.read(firebaseServiceProvider).sendChatMessage(
         widget.chatId,
         currentUser.id,
@@ -113,7 +171,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     final messagesAsync = ref.watch(messagesProvider(widget.chatId));
     final chatUsersAsync = ref.watch(chatUsersProvider(widget.chatId));
+    final typingAsync = ref.watch(typingProvider(widget.chatId));
+    final lastReadByAsync = ref.watch(lastReadByProvider(widget.chatId));
     final currentUser = ref.watch(authProvider).value;
+
+    // Mark chat as read when viewing (once per screen open)
+    if (currentUser != null && !_didMarkRead) {
+      _didMarkRead = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(firebaseServiceProvider).setLastRead(widget.chatId, currentUser.id);
+      });
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -139,10 +207,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundImage: otherUser.photoUrl != null
-                      ? NetworkImage(otherUser.photoUrl!)
+                  backgroundImage: (otherUser.primaryPhotoUrl ?? '').isNotEmpty
+                      ? NetworkImage(otherUser.primaryPhotoUrl!)
                       : null,
-                  child: otherUser.photoUrl == null
+                  child: (otherUser.primaryPhotoUrl ?? '').isEmpty
                       ? const Icon(Icons.person, size: 20, color: Colors.grey)
                       : null,
                 ),
@@ -245,9 +313,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       );
                     } else {
                       // Messages for this date
+                      final otherUserId = chatUsersAsync.valueOrNull
+                          ?.firstWhere(
+                            (u) => u?.id != currentUser?.id,
+                            orElse: () => null,
+                          )
+                          ?.id;
+                      final lastReadBy = lastReadByAsync.valueOrNull ?? {};
+                      final otherLastRead = otherUserId != null ? lastReadBy[otherUserId] : null;
+
                       return Column(
                         children: messagesForDate.map((message) {
                           final isMe = message.senderId == currentUser?.id;
+                          final isRead = isMe &&
+                              otherUserId != null &&
+                              otherLastRead != null &&
+                              !message.timestamp.isAfter(otherLastRead);
+
                           return Align(
                             alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                             child: Container(
@@ -270,22 +352,62 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                         bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(18),
                                       ),
                                     ),
-                                    child: Text(
-                                      message.text,
-                                      style: TextStyle(
-                                        color: isMe ? Colors.white : Colors.black87,
-                                        fontSize: 16,
-                                      ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (message.imageUrl != null &&
+                                            message.imageUrl!.isNotEmpty) ...[
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(12),
+                                            child: SizedBox(
+                                              width: MediaQuery.of(context).size.width * 0.7,
+                                              height: 280,
+                                              child: CachedNetworkImage(
+                                                imageUrl: message.imageUrl!,
+                                                fit: BoxFit.cover,
+                                                placeholder: (_, __) => const Center(
+                                                    child: CircularProgressIndicator()),
+                                                errorWidget: (_, __, e) => const Center(
+                                                    child: Icon(Icons.broken_image, size: 48)),
+                                              ),
+                                            ),
+                                          ),
+                                          if (message.text.isNotEmpty) const SizedBox(height: 8),
+                                        ],
+                                        if (message.text.isNotEmpty)
+                                          Text(
+                                            message.text,
+                                            style: TextStyle(
+                                              color: isMe ? Colors.white : Colors.black87,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                   Padding(
                                     padding: const EdgeInsets.only(top: 4, left: 8, right: 8),
-                                    child: Text(
-                                      _formatTime(message.timestamp),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey[500],
-                                      ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _formatTime(message.timestamp),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey[500],
+                                          ),
+                                        ),
+                                        if (isMe) ...[
+                                          const SizedBox(width: 4),
+                                          Icon(
+                                            isRead ? Icons.done_all : Icons.done,
+                                            size: 14,
+                                            color: isRead ? Colors.blue[300] : Colors.grey[500],
+                                          ),
+                                        ],
+                                      ],
                                     ),
                                   ),
                                 ],
@@ -306,6 +428,58 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
             ),
           ),
+          // Typing indicator
+          typingAsync.when(
+            data: (typing) {
+              if (currentUser == null) return const SizedBox.shrink();
+              final otherTyping = typing.keys.where((id) => id != currentUser.id).toList();
+              if (otherTyping.isEmpty) return const SizedBox.shrink();
+              return chatUsersAsync.when(
+                data: (users) {
+                  final otherUser = users.firstWhere(
+                    (u) => u != null && otherTyping.contains(u!.id),
+                    orElse: () => null,
+                  );
+                  final name = otherUser?.name ?? 'Someone';
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: Center(
+                            child: SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '$name typing...',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              );
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
           // Modern input area
           Container(
             padding: const EdgeInsets.all(16),
@@ -321,18 +495,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
             child: Row(
               children: [
-                // Add media button
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.add,
-                    color: Colors.grey,
-                    size: 24,
+                // Photo button
+                GestureDetector(
+                  onTap: _isUploadingPhoto ? null : _pickAndSendImage,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      shape: BoxShape.circle,
+                    ),
+                    child: _isUploadingPhoto
+                        ? const Padding(
+                            padding: EdgeInsets.all(10),
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(
+                            Icons.photo_library_outlined,
+                            color: Colors.grey,
+                            size: 24,
+                          ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -369,6 +551,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       ),
                       maxLines: null,
                       textInputAction: TextInputAction.send,
+                      onChanged: (_) => _onTypingChanged(),
                       onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
@@ -383,7 +566,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
-                    onPressed: _isLoading ? null : _sendMessage,
+                    onPressed: (_isLoading || _isUploadingPhoto) ? null : _sendMessage,
                     icon: _isLoading
                         ? const SizedBox(
                             width: 20,

@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1020"/>
+      <stop offset="0.55" stop-color="#25133A"/>
+      <stop offset="1" stop-color="#0B1020"/>
+    </linearGradient>
+
+    <radialGradient id="blob1" cx="30%" cy="20%" r="60%">
+      <stop offset="0" stop-color="#7C3AED" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#7C3AED" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blob2" cx="80%" cy="45%" r="55%">
+      <stop offset="0" stop-color="#22D3EE" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blob3" cx="40%" cy="85%" r="65%">
+      <stop offset="0" stop-color="#FB7185" stop-opacity="0.65"/>
+      <stop offset="1" stop-color="#FB7185" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="shadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+
+    <linearGradient id="glassStroke" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.12"/>
+    </linearGradient>
+
+    <linearGradient id="glassFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect width="390" height="844" fill="url(#bg)"/>
+  <rect width="390" height="844" fill="url(#blob1)"/>
+  <rect width="390" height="844" fill="url(#blob2)"/>
+  <rect width="390" height="844" fill="url(#blob3)"/>
+
+  <!-- top glass search -->
+  <g filter="url(#shadow)">
+    <rect x="18" y="54" width="354" height="48" rx="18" fill="url(#glassFill)" stroke="url(#glassStroke)" stroke-width="1"/>
+    <text x="40" y="84" font-family="ui-sans-serif, -apple-system, SF Pro Display" font-size="14" fill="#E5E7EB" opacity="0.9">Ara • Yaş • Mesafe</text>
+    <circle cx="344" cy="78" r="12" fill="#FFFFFF" opacity="0.12" stroke="#FFFFFF" stroke-opacity="0.25"/>
+    <text x="340" y="83" font-family="ui-sans-serif, -apple-system" font-size="12" fill="#E5E7EB">⌕</text>
+  </g>
+
+  <!-- main card -->
+  <g filter="url(#shadow)">
+    <rect x="18" y="124" width="354" height="520" rx="28" fill="#111827" opacity="0.35" stroke="#FFFFFF" stroke-opacity="0.10"/>
+    <rect x="18" y="124" width="354" height="520" rx="28" fill="url(#glassFill)" stroke="url(#glassStroke)" stroke-width="1"/>
+    <!-- fake image -->
+    <rect x="30" y="136" width="330" height="360" rx="22" fill="#000" opacity="0.25"/>
+    <text x="44" y="180" font-family="ui-sans-serif, -apple-system" font-size="12" fill="#E5E7EB" opacity="0.75">Foto / Video alanı</text>
+
+    <!-- name chip -->
+    <rect x="40" y="510" width="150" height="34" rx="16" fill="#FFFFFF" opacity="0.12" stroke="#FFFFFF" stroke-opacity="0.20"/>
+    <text x="56" y="532" font-family="ui-sans-serif, -apple-system" font-size="14" fill="#F9FAFB">Sinem, 25</text>
+
+    <!-- about -->
+    <text x="40" y="576" font-family="ui-sans-serif, -apple-system" font-size="13" fill="#E5E7EB" opacity="0.92">Kısa bio: kahve, film, seyahat.</text>
+    <text x="40" y="598" font-family="ui-sans-serif, -apple-system" font-size="12" fill="#E5E7EB" opacity="0.70">İstanbul • 3 km • Online</text>
+
+    <!-- action buttons -->
+    <g>
+      <circle cx="120" cy="640" r="26" fill="#FFFFFF" opacity="0.10" stroke="#FFFFFF" stroke-opacity="0.22"/>
+      <text x="112" y="646" font-family="ui-sans-serif, -apple-system" font-size="16" fill="#FCA5A5">✕</text>
+
+      <circle cx="195" cy="640" r="30" fill="#FFFFFF" opacity="0.12" stroke="#FFFFFF" stroke-opacity="0.22"/>
+      <text x="188" y="646" font-family="ui-sans-serif, -apple-system" font-size="16" fill="#A7F3D0">❤</text>
+
+      <circle cx="270" cy="640" r="26" fill="#FFFFFF" opacity="0.10" stroke="#FFFFFF" stroke-opacity="0.22"/>
+      <text x="262" y="646" font-family="ui-sans-serif, -apple-system" font-size="16" fill="#93C5FD">★</text>
+    </g>
+  </g>
+
+  <!-- bottom glass nav -->
+  <g filter="url(#shadow)">
+    <rect x="18" y="738" width="354" height="70" rx="26" fill="url(#glassFill)" stroke="url(#glassStroke)" stroke-width="1"/>
+    <text x="62" y="782" font-family="ui-sans-serif, -apple-system" font-size="12" fill="#E5E7EB" opacity="0.85">Discover</text>
+    <text x="172" y="782" font-family="ui-sans-serif, -apple-system" font-size="12" fill="#E5E7EB" opacity="0.65">Chat</text>
+    <text x="292" y="782" font-family="ui-sans-serif, -apple-system" font-size="12" fill="#E5E7EB" opacity="0.65">Profil</text>
+    <circle cx="64" cy="762" r="16" fill="#FFFFFF" opacity="0.14" stroke="#FFFFFF" stroke-opacity="0.18"/>
+    <circle cx="190" cy="762" r="16" fill="#FFFFFF" opacity="0.08" stroke="#FFFFFF" stroke-opacity="0.12"/>
+    <circle cx="304" cy="762" r="16" fill="#FFFFFF" opacity="0.08" stroke="#FFFFFF" stroke-opacity="0.12"/>
+  </g>
+</svg>

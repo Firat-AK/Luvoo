@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luvoo/features/discovery/providers/filter_provider.dart';
+import 'package:luvoo/features/discovery/screens/discovery_feed_screen.dart';
 
 // Base modal widget
 class BaseFilterModal extends StatelessWidget {
@@ -86,10 +87,11 @@ class _AgeRangeModalState extends ConsumerState<AgeRangeModal> {
   @override
   void initState() {
     super.initState();
+    final prefs = ref.read(userPreferencesProvider);
     final filterState = ref.read(filterProvider);
     _ageRange = RangeValues(
-      filterState.ageRange[0].toDouble(),
-      filterState.ageRange[1].toDouble(),
+      prefs.ageRange[0].toDouble(),
+      prefs.ageRange[1].toDouble(),
     );
     _showOthersIfRunOut = filterState.showOthersIfRunOut['ageRange'] ?? false;
   }
@@ -99,11 +101,12 @@ class _AgeRangeModalState extends ConsumerState<AgeRangeModal> {
     return BaseFilterModal(
       title: 'How old are they?',
       onSave: () {
-        ref.read(filterProvider.notifier).updateAgeRange([
-          _ageRange.start.round(),
-          _ageRange.end.round(),
-        ]);
+        final newAgeRange = [_ageRange.start.round(), _ageRange.end.round()];
+        ref.read(filterProvider.notifier).updateAgeRange(newAgeRange);
         ref.read(filterProvider.notifier).updateShowOthersIfRunOut('ageRange', _showOthersIfRunOut);
+        // Sync to userPreferences so discovery filter actually works
+        final prefs = ref.read(userPreferencesProvider);
+        ref.read(userPreferencesProvider.notifier).updatePreferences(prefs.copyWith(ageRange: newAgeRange));
         Navigator.pop(context);
       },
       child: Padding(
@@ -173,8 +176,10 @@ class _DistanceModalState extends ConsumerState<DistanceModal> {
   @override
   void initState() {
     super.initState();
+    // Use userPreferences (source of truth for discovery) so we show correct value
+    final prefs = ref.read(userPreferencesProvider);
     final filterState = ref.read(filterProvider);
-    _distance = filterState.maxDistance.toDouble();
+    _distance = prefs.maxDistance.toDouble();
     _showOthersIfRunOut = filterState.showOthersIfRunOut['distance'] ?? false;
   }
 
@@ -183,8 +188,12 @@ class _DistanceModalState extends ConsumerState<DistanceModal> {
     return BaseFilterModal(
       title: 'How far away?',
       onSave: () {
-        ref.read(filterProvider.notifier).updateMaxDistance(_distance.round());
+        final newDistance = _distance.round();
+        ref.read(filterProvider.notifier).updateMaxDistance(newDistance);
         ref.read(filterProvider.notifier).updateShowOthersIfRunOut('distance', _showOthersIfRunOut);
+        // Sync to userPreferences so discovery filter actually works
+        final prefs = ref.read(userPreferencesProvider);
+        ref.read(userPreferencesProvider.notifier).updatePreferences(prefs.copyWith(maxDistance: newDistance));
         Navigator.pop(context);
       },
       child: Padding(

@@ -142,9 +142,9 @@ class _InterestedUserCard extends StatelessWidget {
       child: Stack(
         children: [
           // Blurred image
-          user.photoUrl != null && user.photoUrl!.isNotEmpty
+          (user.primaryPhotoUrl ?? '').isNotEmpty
               ? Image.network(
-                  user.photoUrl!,
+                  user.primaryPhotoUrl!,
                   height: double.infinity,
                   width: double.infinity,
                   fit: BoxFit.cover,

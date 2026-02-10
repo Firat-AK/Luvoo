@@ -1,303 +1,361 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:luvoo/models/user_model.dart';
-import 'dart:math';
+import 'package:luvoo/core/widgets/liquid_glass.dart';
+import 'package:luvoo/features/discovery/screens/discovery_feed_screen.dart';
 
-class DiscoverScreen extends ConsumerStatefulWidget {
+class DiscoverScreen extends ConsumerWidget {
   const DiscoverScreen({super.key});
 
   @override
-  ConsumerState<DiscoverScreen> createState() => _DiscoverScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
 
-class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
-  // Rastgele resim listesi
-  final List<String> _imageAssets = [
-    'assets/images/sinemunsal.jpg',
-    'assets/images/meganfox.jpg',
-    'assets/images/margotrobbie.jpg',
-    'assets/images/images.jpeg',
-  ];
-
-  // Rastgele resim seçme fonksiyonu
-  String _getRandomImage() {
-    final random = Random();
-    return _imageAssets[random.nextInt(_imageAssets.length)];
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Discover',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(
-                      color: Colors.grey,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.help_outline,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Similar interests section
-                    const Text(
-                      'Similar interests',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // Horizontal scrollable cards
-                    SizedBox(
-                      height: 280,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: 5,
-                        itemBuilder: (context, index) {
-                          return _DiscoverCard(
-                            name: ['Sky', 'Larissa', 'Emma', 'Sophia', 'Olivia'][index],
-                            age: [44, 43, 41, 39, 42][index],
-                            photoUrl: _getRandomImage(), // Rastgele resim
-                            badges: [
-                              ['Coffee', '+3'],
-                              ['Coffee', 'Travel'],
-                              ['Music', 'Art'],
-                              ['Sports', 'Fitness'],
-                              ['Reading', 'Movies'],
-                            ][index],
-                            isVerified: index % 2 == 0,
-                          );
-                        },
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 32),
-                    
-                    // Same dating goals section
-                    const Text(
-                      'Same dating goals',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // Second horizontal scrollable cards
-                    SizedBox(
-                      height: 280,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: 5,
-                        itemBuilder: (context, index) {
-                          return _DiscoverCard(
-                            name: ['Nicolette', 'Kat', 'Mia', 'Ava', 'Isabella'][index],
-                            age: [42, 44, 38, 40, 43][index],
-                            photoUrl: _getRandomImage(), // Rastgele resim
-                            badges: [
-                              ['Life partner', '+1'],
-                              ['Open to kids', 'Family'],
-                              ['Long-term', 'Commitment'],
-                              ['Marriage', 'Future'],
-                              ['Serious', 'Relationship'],
-                            ][index],
-                            isVerified: index % 3 == 0,
-                          );
-                        },
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 32),
+      backgroundColor: isDark ? null : colorScheme.surface,
+      body: Stack(
+        children: [
+          if (isDark)
+            Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF0B1020),
+                    Color(0xFF25133A),
+                    Color(0xFF0B1020),
                   ],
+                  stops: [0.0, 0.55, 1.0],
                 ),
               ),
             ),
-          ],
+          SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Glass Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  child: GlassContainer(
+                    borderRadius: BorderRadius.circular(18),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Discover',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.onSurface,
+                          ),
+                        ),
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerHighest.withOpacity(0.8),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: colorScheme.outline.withOpacity(0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.help_outline,
+                            color: colorScheme.onSurface,
+                            size: 24,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            
+            Expanded(
+              child: ref.watch(discoveryUsersProvider).when(
+                data: (users) {
+                  if (users.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'No one to discover yet',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Check back later or adjust your filters',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: colorScheme.onSurface.withOpacity(0.8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  final similar = users.take(5).toList();
+                  final goals = users.length > 5 ? users.skip(5).take(5).toList() : <UserModel>[];
+                  return SingleChildScrollView(
+                    padding: EdgeInsets.only(
+                      left: 24,
+                      right: 24,
+                      bottom: MediaQuery.of(context).padding.bottom + 80,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Similar interests',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          height: 280,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: similar.length,
+                            itemBuilder: (context, index) {
+                              final user = similar[index];
+                              return _DiscoverCard(
+                                user: user,
+                                onTap: () => context.push('/profile/${user.id}'),
+                                colorScheme: colorScheme,
+                              );
+                            },
+                          ),
+                        ),
+                        if (goals.isNotEmpty) ...[
+                          const SizedBox(height: 32),
+                          Text(
+                            'Same dating goals',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            height: 280,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: goals.length,
+                              itemBuilder: (context, index) {
+                                final user = goals[index];
+                                return _DiscoverCard(
+                                  user: user,
+                                  onTap: () => context.push('/profile/${user.id}'),
+                                  colorScheme: colorScheme,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 32),
+                      ],
+                    ),
+                  );
+                },
+                loading: () => Center(
+                  child: CircularProgressIndicator(color: colorScheme.primary),
+                ),
+                error: (error, _) => Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Something went wrong',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '$error',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurface.withOpacity(0.8),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            ],
+          ),
         ),
+        ],
       ),
     );
   }
 }
 
 class _DiscoverCard extends StatelessWidget {
-  final String name;
-  final int age;
-  final String photoUrl;
-  final List<String> badges;
-  final bool isVerified;
+  final UserModel user;
+  final VoidCallback? onTap;
+  final ColorScheme? colorScheme;
 
   const _DiscoverCard({
-    required this.name,
-    required this.age,
-    required this.photoUrl,
-    required this.badges,
-    required this.isVerified,
+    required this.user,
+    this.onTap,
+    this.colorScheme,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 200,
-      margin: const EdgeInsets.only(right: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Profile image with badges
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Stack(
-                children: [
-                  // Gerçek resim
-                  Container(
-                    width: double.infinity,
-                    height: double.infinity,
-                    child: Image.asset(
-                      photoUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        // Eğer resim yüklenemezse placeholder göster
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey[300],
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Icon(
-                            Icons.person,
-                            size: 80,
-                            color: Colors.grey,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  
-                  // Badges overlay
-                  Positioned(
-                    left: 12,
-                    bottom: 12,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: badges.map((badge) {
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.7),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _getBadgeIcon(badge),
-                                color: Colors.white,
-                                size: 12,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                badge,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w500,
+    final cs = colorScheme ?? Theme.of(context).colorScheme;
+    final badges = user.interests.take(3).toList();
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 200,
+        margin: const EdgeInsets.only(right: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: GlassContainer(
+                borderRadius: BorderRadius.circular(22),
+                padding: EdgeInsets.zero,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: Stack(
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        height: double.infinity,
+                        child: (user.primaryPhotoUrl ?? '').isNotEmpty
+                            ? Image.network(
+                                user.primaryPhotoUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _photoPlaceholder(context),
+                              )
+                            : _photoPlaceholder(context),
+                      ),
+                      if (badges.isNotEmpty)
+                        Positioned(
+                          left: 12,
+                          bottom: 12,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: badges.map((badge) {
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: cs.surface.withOpacity(0.9),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: cs.outline.withOpacity(0.5),
+                                    width: 1,
+                                  ),
                                 ),
-                              ),
-                            ],
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _getBadgeIcon(badge),
+                                      color: cs.onSurface,
+                                      size: 12,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      badge,
+                                      style: TextStyle(
+                                        color: cs.onSurface,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
                           ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  
-                  // Like button
-                  Positioned(
-                    right: 12,
-                    bottom: 12,
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
+                        ),
+                      Positioned(
+                        right: 12,
+                        bottom: 12,
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: cs.surface.withOpacity(0.9),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: cs.outline.withOpacity(0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.favorite_border,
+                            color: cs.primary,
+                            size: 20,
+                          ),
+                        ),
                       ),
-                      child: const Icon(
-                        Icons.favorite_border,
-                        color: Colors.pink,
-                        size: 20,
-                      ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
-          ),
-          
-          const SizedBox(height: 8),
-          
-          // Profile info
-          Row(
-            children: [
-              Text(
-                '$name, $age',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black,
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${user.name}, ${user.age}',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-              if (isVerified) ...[
-                const SizedBox(width: 4),
-                const Icon(
-                  Icons.verified,
-                  color: Colors.blue,
-                  size: 16,
+                Icon(
+                  Icons.favorite_border,
+                  color: cs.onSurface.withOpacity(0.7),
+                  size: 20,
                 ),
               ],
-              const Spacer(),
-              const Icon(
-                Icons.favorite_border,
-                color: Colors.grey,
-                size: 20,
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _photoPlaceholder(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Icon(
+        Icons.person,
+        size: 80,
+        color: cs.onSurface.withOpacity(0.5),
       ),
     );
   }

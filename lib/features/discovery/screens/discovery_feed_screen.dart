@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:luvoo/core/services/firebase_service.dart';
+import 'package:luvoo/core/services/location_service.dart';
+import 'package:luvoo/core/widgets/liquid_glass.dart';
 import 'package:luvoo/features/auth/providers/auth_provider.dart';
 import 'package:luvoo/models/user_model.dart';
 import 'package:luvoo/features/discovery/screens/interested_in_me_page.dart';
@@ -20,6 +22,8 @@ final discoveryUsersProvider = StreamProvider<List<UserModel>>((ref) {
     ageRange: preferences.ageRange,
     maxDistance: preferences.maxDistance,
     interests: preferences.interests,
+    myLatitude: user.latitude,
+    myLongitude: user.longitude,
   );
 });
 
@@ -137,16 +141,43 @@ class _DiscoverBodyState extends ConsumerState<_DiscoverBody> {
   late List<SwipeItem> _swipeItems;
   late MatchEngine _matchEngine;
   int _currentIndex = 0;
-  bool _showFilters = false; // Filtreleme popup'ı için
+  bool _showFilters = false;
+  List<String> _lastUserIds = []; // Avoid resetting when same users rebuild
 
   @override
   void initState() {
     super.initState();
     _swipeItems = [];
     _matchEngine = MatchEngine(swipeItems: _swipeItems);
+    _refreshLocationOnOpen();
+  }
+
+  Future<void> _refreshLocationOnOpen() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    final position = await LocationService().getCurrentLocation();
+    if (position != null) {
+      final user = ref.read(authProvider).value;
+      if (user != null) {
+        await ref.read(firebaseServiceProvider).updateUserLocation(
+          user.id,
+          position.latitude,
+          position.longitude,
+        );
+        ref.read(authProvider.notifier).refreshUser();
+      }
+    }
   }
 
   void _setupSwipeItems(List<UserModel> users, WidgetRef ref) {
+    // Don't reset if we have the same users - prevents MatchEngine reset on auth/location refresh
+    final userIds = users.map((u) => u.id).toList();
+    if (_lastUserIds.length == userIds.length &&
+        _lastUserIds.isNotEmpty &&
+        _lastUserIds.first == userIds.first) {
+      return;
+    }
+    _lastUserIds = userIds;
+
     _swipeItems.clear();
     final currentUser = ref.read(authProvider).value;
     for (final user in users) {
@@ -170,16 +201,21 @@ class _DiscoverBodyState extends ConsumerState<_DiscoverBody> {
             return;
           },
           superlikeAction: () async {
+            if (currentUser == null) return;
+            await ref.read(firebaseServiceProvider).superLikeUser(currentUser.id, user.id);
+            setState(() {
+              _currentIndex++;
+            });
             return;
           },
           onSlideUpdate: (region) async {
             return;
           },
-      ),
-    );
-  }
+        ),
+      );
+    }
     _matchEngine = MatchEngine(swipeItems: _swipeItems);
-}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -199,62 +235,59 @@ class _DiscoverBodyState extends ConsumerState<_DiscoverBody> {
     final screenWidth = mediaQuery.size.width;
     final cardWidth = screenWidth * 0.90;
     final cardHeight = screenHeight * 0.70;
-    
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Stack(
       children: [
-        Column(
-          children: [
-            // Bumble tarzı AppBar
-            SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Luvoo',
-                      style: TextStyle(
-                        fontFamily: 'Montserrat', // Eğer ekli değilse varsayılan bold kullanılır
-                        fontWeight: FontWeight.bold,
-                        fontSize: 28,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.share_outlined, size: 28),
-                          onPressed: () {},
-                        ),
-                        SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.tune, size: 28), // Filtreleme ikonu
-                          onPressed: () {
-                            context.push('/filter');
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+        if (isDark)
+          Container(
+            width: double.infinity,
+            height: double.infinity,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF0B1020),
+                  Color(0xFF25133A),
+                  Color(0xFF0B1020),
+                ],
+                stops: [0.0, 0.55, 1.0],
               ),
             ),
+          ),
+        if (!isDark)
+          Container(
+            width: double.infinity,
+            height: double.infinity,
+            color: colorScheme.surface,
+          ),
+        Column(
+          children: [
             Expanded(
-              child: usersAsync.when(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).padding.bottom + 80,
+                ),
+                child: usersAsync.when(
                 data: (users) {
                   if (users.isEmpty || _currentIndex >= users.length) {
                     return Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text(
+                          Text(
                             'No users found',
-                            style: TextStyle(fontSize: 18),
+                            style: TextStyle(fontSize: 18, color: colorScheme.onSurface),
                           ),
                           const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: () => context.go('/main'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: colorScheme.primary,
+                              foregroundColor: colorScheme.onPrimary,
+                            ),
                             child: const Text('Refresh'),
                           ),
                         ],
@@ -272,10 +305,26 @@ class _DiscoverBodyState extends ConsumerState<_DiscoverBody> {
                           matchEngine: _matchEngine,
                           itemBuilder: (BuildContext context, int index) {
                             final user = users[index];
+                            final currentUser = ref.read(authProvider).value;
+                            double? distanceKm;
+                            if (currentUser?.latitude != null &&
+                                currentUser?.longitude != null &&
+                                user.latitude != null &&
+                                user.longitude != null) {
+                              distanceKm = LocationService.distanceInKm(
+                                currentUser!.latitude!,
+                                currentUser.longitude!,
+                                user.latitude!,
+                                user.longitude!,
+                              );
+                            }
                             return DiscoverUserCard(
                               user: user,
+                              distanceKm: distanceKm,
+                              onCardTap: () => context.push('/profile/${user.id}'),
                               onLike: () => _matchEngine.currentItem?.like(),
                               onDislike: () => _matchEngine.currentItem?.nope(),
+                              onSuperLike: () => _matchEngine.currentItem?.superLike(),
                               onMessage: () async {
                                 final currentUser = ref.read(authProvider).value;
                                 if (currentUser == null) return;
@@ -306,23 +355,54 @@ class _DiscoverBodyState extends ConsumerState<_DiscoverBody> {
                               _currentIndex = index;
                             });
                           },
-                          upSwipeAllowed: false,
+                          upSwipeAllowed: true,
                           fillSpace: true,
                         ),
                       ),
                     ),
                   );
                 },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, stack) => Center(child: Text('Error: $error')),
+                loading: () => Center(
+                  child: CircularProgressIndicator(color: colorScheme.primary),
+                ),
+                error: (error, stack) => Center(
+                  child: Text('Error: $error', style: TextStyle(color: colorScheme.onSurface))),
+                ),
               ),
             ),
           ],
         ),
         
-        // Filtreleme Popup
+        // Filter popup
         if (_showFilters)
           _buildFiltersPopup(),
+        // Rewind – undo last swipe (only UI; card comes back)
+        usersAsync.when(
+          data: (users) {
+            if (users.isEmpty || _currentIndex <= 0) return const SizedBox.shrink();
+            return Positioned(
+              left: 20,
+              bottom: MediaQuery.of(context).padding.bottom + 24,
+              child: Material(
+                color: colorScheme.surfaceContainerHighest.withOpacity(0.9),
+                shape: const CircleBorder(),
+                child: InkWell(
+                  onTap: () {
+                    _matchEngine.rewindMatch();
+                    setState(() => _currentIndex--);
+                  },
+                  customBorder: const CircleBorder(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Icon(Icons.replay, color: colorScheme.primary, size: 28),
+                  ),
+                ),
+              ),
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        ),
       ],
     );
   }
@@ -416,6 +496,211 @@ class _DiscoverBodyState extends ConsumerState<_DiscoverBody> {
         ),
       );
     }
+  }
+
+  void _showExpandedProfile(BuildContext context, UserModel user) {
+    final currentUser = ref.read(authProvider).value;
+    if (currentUser == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF0B1020),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    16,
+                    20,
+                    24 + MediaQuery.of(context).padding.bottom + 80,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Photo
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: (user.primaryPhotoUrl ?? '').isNotEmpty
+                            ? Image.network(
+                                user.primaryPhotoUrl!,
+                                width: double.infinity,
+                                height: 320,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _photoPlaceholder(320),
+                              )
+                            : _photoPlaceholder(320),
+                      ),
+                      const SizedBox(height: 20),
+                      // Name, age
+                      Text(
+                        '${user.name ?? ''}, ${user.age}',
+                        style: const TextStyle(
+                          color: Color(0xFFE5E7EB),
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Bio
+                      if ((user.bio ?? '').isNotEmpty) ...[
+                        const Text(
+                          'About',
+                          style: TextStyle(
+                            color: Color(0xFFE5E7EB),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          user.bio!,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 15,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                      // Interests
+                      if (user.interests.isNotEmpty) ...[
+                        const Text(
+                          'Interests',
+                          style: TextStyle(
+                            color: Color(0xFFE5E7EB),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: user.interests.map((interest) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.white.withOpacity(0.2)),
+                              ),
+                              child: Text(
+                                interest,
+                                style: const TextStyle(color: Color(0xFFE5E7EB), fontSize: 14),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                      // Diğer detaylar (varsa)
+                      if (user.education != null || user.exercise != null || user.lookingFor != null) ...[
+                        const Text(
+                          'Details',
+                          style: TextStyle(
+                            color: Color(0xFFE5E7EB),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (user.education != null) _detailRow('Education', user.education!),
+                        if (user.exercise != null) _detailRow('Exercise', user.exercise!),
+                        if (user.lookingFor != null) _detailRow('Looking for', user.lookingFor!),
+                        const SizedBox(height: 20),
+                      ],
+                      const SizedBox(height: 16),
+                      // Message button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            Navigator.of(context).pop();
+                            try {
+                              final chatId = await ref.read(firebaseServiceProvider).startOrGetChat(currentUser.id, user.id);
+                              if (context.mounted) {
+                                GoRouter.of(context).push('/chat/$chatId');
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Could not start chat: $e'), backgroundColor: Colors.red),
+                                );
+                              }
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFA78BFA),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                          child: const Text('Send Message'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _photoPlaceholder(double height) {
+    return Container(
+      height: height,
+      width: double.infinity,
+      color: Colors.white.withOpacity(0.08),
+      child: Icon(Icons.person, size: 80, color: Colors.white.withOpacity(0.3)),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Color(0xFFE5E7EB), fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildFiltersPopup() {
@@ -811,11 +1096,24 @@ class _DiscoverBodyState extends ConsumerState<_DiscoverBody> {
 
 class DiscoverUserCard extends StatelessWidget {
   final UserModel user;
+  final double? distanceKm;
+  final VoidCallback? onCardTap;
   final VoidCallback? onLike;
   final VoidCallback? onDislike;
+  final VoidCallback? onSuperLike;
   final VoidCallback? onMessage;
   final VoidCallback? onReplay;
-  const DiscoverUserCard({super.key, required this.user, this.onLike, this.onDislike, this.onMessage, this.onReplay});
+  const DiscoverUserCard({
+    super.key,
+    required this.user,
+    this.distanceKm,
+    this.onCardTap,
+    this.onLike,
+    this.onDislike,
+    this.onSuperLike,
+    this.onMessage,
+    this.onReplay,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -825,55 +1123,74 @@ class DiscoverUserCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
-          (user.photoUrl ?? '').isNotEmpty
-              ? Image.network(
-                  user.photoUrl!,
-                  height: MediaQuery.of(context).size.height * 0.65,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                )
-              : Container(
-                  height: MediaQuery.of(context).size.height * 0.65,
-                  color: Colors.grey[300],
-                  child: const Icon(Icons.person, size: 120),
-                ),
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 24,
-            right: 24,
-            bottom: 90,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          GestureDetector(
+            onTap: onCardTap,
+            behavior: HitTestBehavior.opaque,
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                Text(
-                  user.name ?? '',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
+                (user.primaryPhotoUrl ?? '').isNotEmpty
+                    ? (user.photoUrls.length > 1
+                        ? PageView.builder(
+                            itemCount: user.photoUrls.length,
+                            itemBuilder: (_, i) => Image.network(
+                              user.photoUrls[i],
+                              height: MediaQuery.of(context).size.height * 0.65,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : Image.network(
+                            user.primaryPhotoUrl!,
+                            height: MediaQuery.of(context).size.height * 0.65,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ))
+                    : Container(
+                        height: MediaQuery.of(context).size.height * 0.65,
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.person, size: 120),
+                      ),
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${user.age} years old',
-                  style: const TextStyle(color: Colors.white70, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  user.bio ?? '',
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                Positioned(
+                  left: 24,
+                  right: 24,
+                  bottom: 90,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.name ?? '',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${user.age} years old${distanceKm != null ? ' • ${distanceKm!.round()} km away' : ''}',
+                        style: const TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        user.bio ?? '',
+                        style: const TextStyle(color: Colors.white, fontSize: 16),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -883,10 +1200,11 @@ class DiscoverUserCard extends StatelessWidget {
             right: 0,
             bottom: 16,
             child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
                 _actionButton(Icons.close, Colors.red, onDislike),
                 _actionButton(Icons.favorite_border, Colors.pink, onLike),
+                _actionButton(Icons.star, const Color(0xFF7C3AED), onSuperLike),
                 _actionButton(Icons.message, Colors.blue, onMessage),
               ],
             ),
@@ -899,10 +1217,14 @@ class DiscoverUserCard extends StatelessWidget {
   Widget _actionButton(IconData icon, Color color, VoidCallback? onPressed) {
     return GestureDetector(
       onTap: onPressed,
-      child: CircleAvatar(
-      backgroundColor: Colors.white,
-      radius: 28,
-      child: Icon(icon, color: color, size: 32),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.12),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withOpacity(0.22), width: 1),
+        ),
+        child: Icon(icon, color: color, size: 28),
       ),
     );
   }

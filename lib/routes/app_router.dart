@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:luvoo/core/services/firebase_service.dart';
+import 'package:luvoo/features/onboarding/screens/onboarding_screen.dart';
 import 'package:luvoo/features/auth/screens/login_screen.dart';
 import 'package:luvoo/features/auth/screens/register_screen.dart';
 import 'package:luvoo/features/profile/screens/profile_setup_screen.dart';
@@ -17,9 +18,18 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
     redirect: (context, state) async {
+      final location = state.matchedLocation;
+
+      // 1. Onboarding: show first for new users
+      final onboardingDone = await isOnboardingCompleted();
+      if (!onboardingDone && location != '/onboarding') {
+        return '/onboarding';
+      }
+      if (location == '/onboarding') return null;
+
+      // 2. Auth
       final user = firebaseService.auth.currentUser;
-      final isAuthRoute = state.matchedLocation == '/login' || 
-                         state.matchedLocation == '/register';
+      final isAuthRoute = location == '/login' || location == '/register';
 
       if (user == null) {
         return isAuthRoute ? null : '/login';
@@ -28,16 +38,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       final userModel = await firebaseService.getUser(user.uid);
       
       if (userModel == null || !userModel.isProfileComplete) {
-        return state.matchedLocation == '/profile-setup' ? null : '/profile-setup';
+        return location == '/profile-setup' ? null : '/profile-setup';
       }
       
-      if (isAuthRoute || state.matchedLocation == '/') {
+      if (isAuthRoute || location == '/') {
         return '/main';
       }
 
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => const OnboardingScreen(),
+      ),
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),

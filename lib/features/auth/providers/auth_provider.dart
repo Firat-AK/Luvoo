@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:luvoo/core/services/firebase_service.dart';
 import 'package:luvoo/models/user_model.dart';
@@ -76,10 +77,62 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
     }
   }
 
+  Future<void> signInWithGoogle() async {
+    try {
+      state = const AsyncValue.loading();
+      await _firebaseService.signInWithGoogle();
+      // State will be updated by authStateChanges listener
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      rethrow;
+    }
+  }
+
+  Future<void> signInWithApple() async {
+    try {
+      state = const AsyncValue.loading();
+      await _firebaseService.signInWithApple();
+      // State will be updated by authStateChanges listener
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      rethrow;
+    }
+  }
+
+  Future<void> linkCredentialToExistingAccount({
+    required String email,
+    required String password,
+    required AuthCredential credential,
+  }) async {
+    try {
+      state = const AsyncValue.loading();
+      await _firebaseService.linkCredentialToExistingAccount(
+        email: email,
+        password: password,
+        credential: credential,
+      );
+      // State will be updated by authStateChanges listener
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      rethrow;
+    }
+  }
+
   Future<void> signOut() async {
     try {
       await _firebaseService.signOut();
       // State will be updated by authStateChanges listener
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+      rethrow;
+    }
+  }
+
+  Future<void> deleteAccount({String? password}) async {
+    try {
+      state = const AsyncValue.loading();
+      await _firebaseService.deleteAccount(password: password);
+      state = const AsyncValue.data(null);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
       rethrow;
@@ -95,6 +148,18 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
     } catch (e, st) {
       state = AsyncValue.error(e, st);
       rethrow;
+    }
+  }
+
+  /// Refresh user data from Firestore (e.g. after location update).
+  Future<void> refreshUser() async {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    try {
+      final updated = await _firebaseService.getUser(current.id);
+      if (updated != null) state = AsyncValue.data(updated);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
     }
   }
 } 

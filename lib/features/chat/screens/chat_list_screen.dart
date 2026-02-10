@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:luvoo/core/services/firebase_service.dart';
 import 'package:luvoo/features/auth/providers/auth_provider.dart';
 import 'package:luvoo/models/user_model.dart';
+import 'package:luvoo/core/widgets/liquid_glass.dart';
 import 'package:intl/intl.dart';
 import 'package:luvoo/models/match_model.dart';
 
@@ -34,177 +35,238 @@ class ChatListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final chatsAsync = ref.watch(chatsProvider);
     final matchesAsync = ref.watch(userMatchesProvider);
-    
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'Chats & Matches',
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search, color: Colors.black),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.black),
-            onPressed: () {},
-          ),
-        ],
-      ),
-      body: Column(
+      backgroundColor: isDark ? null : colorScheme.surface,
+      body: Stack(
         children: [
-          // Matches Section
-          matchesAsync.when(
-            data: (matches) {
-              if (matches.isNotEmpty) {
-                return Container(
-                  height: 120,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'Your Matches',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: matches.length,
-                          itemBuilder: (context, index) {
-                            final match = matches[index];
-                            return MatchCard(match: match);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-          ),
-          
-          // Divider
-          if (matchesAsync.value?.isNotEmpty == true)
-            const Divider(height: 1, thickness: 1),
-          
-          // Chats Section
-          Expanded(
-            child: chatsAsync.when(
-              data: (chats) {
-                if (chats.isEmpty && matchesAsync.value?.isEmpty != false) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.chat_bubble_outline,
-                            size: 60,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        const Text(
-                          'No chats yet',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Start matching with people to begin chatting!',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 32),
-                        ElevatedButton(
-                          onPressed: () => context.go('/main'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.purple,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                          ),
-                          child: const Text(
-                            'Find Matches',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: chats.length,
-                  itemBuilder: (context, index) {
-                    final chat = chats[index];
-                    return ModernChatCard(chat: chat);
-                  },
-                );
-              },
-              loading: () => const Center(
-                child: CircularProgressIndicator(),
+          if (isDark)
+            Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF0B1020),
+                    Color(0xFF25133A),
+                    Color(0xFF0B1020),
+                  ],
+                  stops: [0.0, 0.55, 1.0],
+                ),
               ),
-              error: (error, stack) => Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      size: 64,
-                      color: Colors.red,
+            ),
+          Column(
+            children: [
+              // Glass AppBar
+              SafeArea(
+                bottom: false,
+                child:                 GlassAppBar(
+                  height: 64,
+                  title: Text(
+                    'Chats',
+                    style: TextStyle(
+                      color: colorScheme.onSurface,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Error: $error',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.red,
+                  ),
+                  actions: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHighest.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(
+                          color: colorScheme.outline.withOpacity(0.5),
+                          width: 1,
+                        ),
                       ),
-                      textAlign: TextAlign.center,
+                      child: Text(
+                        'Requests (2)',
+                        style: TextStyle(
+                          color: colorScheme.onSurface,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: Icon(Icons.search, color: colorScheme.onSurface),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.more_vert, color: colorScheme.onSurface),
+                      onPressed: () {},
                     ),
                   ],
                 ),
               ),
-            ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Matches Section (fixed height so chat list gets rest)
+                    matchesAsync.when(
+                      data: (matches) {
+                        if (matches.isNotEmpty) {
+                          return Container(
+                            height: 120,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text(
+                                    'Your Matches',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFFE5E7EB),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Expanded(
+                                  child: ListView.builder(
+                                    scrollDirection: Axis.horizontal,
+                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    itemCount: matches.length,
+                                    itemBuilder: (context, index) {
+                                      final match = matches[index];
+                                      return MatchCard(match: match);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, __) => const SizedBox.shrink(),
+                    ),
+                    if (matchesAsync.value?.isNotEmpty == true)
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: Colors.white.withOpacity(0.1),
+                      ),
+                    // Chats Section – takes all remaining space
+                    Expanded(
+                      child: chatsAsync.when(
+                        data: (chats) {
+                          if (chats.isEmpty && matchesAsync.value?.isEmpty != false) {
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: 120,
+                                    height: 120,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.08),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.chat_bubble_outline,
+                                      size: 60,
+                                      color: Colors.white.withOpacity(0.5),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  const Text(
+                                    'No chats yet',
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFFE5E7EB),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Start matching with people to begin chatting!',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.white.withOpacity(0.6),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 32),
+                                  ElevatedButton(
+                                    onPressed: () => context.go('/main'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.purple,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      'Find Matches',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          return ListView.builder(
+                            padding: EdgeInsets.only(
+                              top: 8,
+                              bottom: 8 + MediaQuery.of(context).padding.bottom + 80,
+                            ),
+                            itemCount: chats.length,
+                            itemBuilder: (context, index) {
+                              final chat = chats[index];
+                              return ModernChatCard(chat: chat);
+                            },
+                          );
+                        },
+                        loading: () => const Center(
+                          child: CircularProgressIndicator(color: Color(0xFFE5E7EB)),
+                        ),
+                        error: (error, stack) => Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24.0),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.error_outline,
+                                  size: 64,
+                                  color: Colors.red,
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Error: $error',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.red,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -263,9 +325,9 @@ class MatchCard extends ConsumerWidget {
                     border: Border.all(color: Colors.pink, width: 2),
                   ),
                   child: ClipOval(
-                    child: otherUser.photoUrl != null && otherUser.photoUrl!.isNotEmpty
+                    child: (otherUser.primaryPhotoUrl ?? '').isNotEmpty
                         ? Image.network(
-                            otherUser.photoUrl!,
+                            otherUser.primaryPhotoUrl!,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
                               return Container(
@@ -349,24 +411,14 @@ class ModernChatCard extends ConsumerWidget {
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => context.go('/chat/${chat['id']}'),
-              borderRadius: BorderRadius.circular(16),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+          child: GlassContainer(
+            borderRadius: BorderRadius.circular(22),
+            padding: const EdgeInsets.all(16),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => context.go('/chat/${chat['id']}'),
+                borderRadius: BorderRadius.circular(22),
                 child: Row(
                   children: [
                     // Profile image
@@ -374,11 +426,11 @@ class ModernChatCard extends ConsumerWidget {
                       children: [
                         CircleAvatar(
                           radius: 28,
-                          backgroundImage: otherUser.photoUrl != null
-                              ? NetworkImage(otherUser.photoUrl!)
+                          backgroundImage: (otherUser.primaryPhotoUrl ?? '').isNotEmpty
+                              ? NetworkImage(otherUser.primaryPhotoUrl!)
                               : null,
-                          child: otherUser.photoUrl == null
-                              ? const Icon(Icons.person, size: 32, color: Colors.grey)
+                          child: (otherUser.primaryPhotoUrl ?? '').isEmpty
+                              ? Icon(Icons.person, size: 32, color: Colors.white.withOpacity(0.6))
                               : null,
                         ),
                         // Online indicator (you can add this later)
@@ -390,7 +442,7 @@ class ModernChatCard extends ConsumerWidget {
                               width: 16,
                               height: 16,
                               decoration: BoxDecoration(
-                                color: Colors.green,
+                                color: const Color(0xFF22C55E),
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.white, width: 2),
                               ),
@@ -412,7 +464,7 @@ class ModernChatCard extends ConsumerWidget {
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
+                                    color: Color(0xFFF9FAFB),
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -424,7 +476,9 @@ class ModernChatCard extends ConsumerWidget {
                                   _formatTime(lastMessageTime),
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: unreadCount > 0 ? Colors.purple : Colors.grey[500],
+                                    color: unreadCount > 0 
+                                        ? const Color(0xFFA78BFA) 
+                                        : Colors.white.withOpacity(0.6),
                                     fontWeight: unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
                                   ),
                                 ),
@@ -439,7 +493,9 @@ class ModernChatCard extends ConsumerWidget {
                                   lastMessage ?? 'No messages yet',
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: unreadCount > 0 ? Colors.black87 : Colors.grey[600],
+                                    color: unreadCount > 0 
+                                        ? const Color(0xFFE5E7EB) 
+                                        : Colors.white.withOpacity(0.70),
                                     fontWeight: unreadCount > 0 ? FontWeight.w500 : FontWeight.normal,
                                   ),
                                   maxLines: 1,
@@ -451,14 +507,14 @@ class ModernChatCard extends ConsumerWidget {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                                    color: Colors.purple,
+                                    color: const Color(0xFF22C55E),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(
                                     unreadCount.toString(),
                                     style: const TextStyle(
                                       fontSize: 12,
-                                      color: Colors.white,
+                                      color: Color(0xFF08111F),
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),

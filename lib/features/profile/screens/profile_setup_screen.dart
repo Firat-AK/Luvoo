@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:luvoo/core/theme/app_theme.dart';
+import 'package:luvoo/core/theme/theme_provider.dart';
 import 'package:luvoo/core/widgets/app_button.dart';
 import 'package:luvoo/core/widgets/app_text_field.dart';
+import 'package:luvoo/core/widgets/liquid_glass.dart';
 import 'package:luvoo/features/auth/providers/auth_provider.dart';
 import 'package:luvoo/models/user_model.dart';
 import 'package:luvoo/core/services/firebase_service.dart';
+import 'package:luvoo/core/services/location_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
@@ -22,7 +26,9 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _bioController = TextEditingController();
   final _imagePicker = ImagePicker();
-  File? _imageFile;
+  static const int _maxPhotos = 6;
+  List<File> _photoFiles = []; // Newly picked, not yet uploaded
+  List<String> _photoUrls = []; // Existing URLs from Firestore
   String _selectedGender = 'male';
   DateTime _selectedBirthday = DateTime.now().subtract(const Duration(days: 365 * 18));
   bool _isLoading = false;
@@ -109,6 +115,10 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       _selectedGender = user.gender ?? 'male';
       _selectedBirthday = user.birthday ?? DateTime.now().subtract(const Duration(days: 365 * 18));
       _selectedInterests = List<String>.from(user.interests);
+      _photoUrls = List<String>.from(user.photoUrls);
+      if (_photoUrls.isEmpty && user.photoUrl != null && user.photoUrl!.isNotEmpty) {
+        _photoUrls = [user.photoUrl!];
+      }
       
       // Load advanced fields
       _selectedEducation = user.education;
@@ -134,6 +144,16 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   }
 
   Future<void> _pickImage() async {
+    final totalCount = _photoUrls.length + _photoFiles.length;
+    if (totalCount >= _maxPhotos) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Maximum $_maxPhotos photos allowed')),
+        );
+      }
+      return;
+    }
+
     final pickedFile = await _imagePicker.pickImage(
       source: ImageSource.gallery,
       maxWidth: 1000,
@@ -143,9 +163,23 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
     if (pickedFile != null) {
       setState(() {
-        _imageFile = File(pickedFile.path);
+        _photoFiles.add(File(pickedFile.path));
       });
     }
+  }
+
+  void _removePhoto(int index) {
+    setState(() {
+      if (index < _photoUrls.length) {
+        _photoUrls.removeAt(index);
+      } else {
+        _photoFiles.removeAt(index - _photoUrls.length);
+      }
+    });
+  }
+
+  List<dynamic> get _allPhotos {
+    return [..._photoUrls, ..._photoFiles];
   }
 
   Future<void> _selectDate() async {
@@ -172,11 +206,22 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       final firebaseUser = FirebaseAuth.instance.currentUser;
       if (firebaseUser == null) throw Exception('User not found');
 
-      String? photoUrl;
-      if (_imageFile != null) {
-        photoUrl = await ref
+      List<String> photoUrls = List.from(_photoUrls);
+      if (_photoFiles.isNotEmpty) {
+        final newUrls = await ref
             .read(firebaseServiceProvider)
-            .uploadProfileImage(firebaseUser.uid, _imageFile!);
+            .uploadProfileImages(firebaseUser.uid, _photoFiles);
+        photoUrls.addAll(newUrls);
+        if (photoUrls.length > _maxPhotos) photoUrls = photoUrls.sublist(0, _maxPhotos);
+      }
+
+      // Get current location for distance filtering
+      double? latitude;
+      double? longitude;
+      final position = await LocationService().getCurrentLocation();
+      if (position != null) {
+        latitude = position.latitude;
+        longitude = position.longitude;
       }
 
       final currentUser = ref.read(authProvider).value;
@@ -187,7 +232,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         bio: _bioController.text.trim(),
         gender: _selectedGender,
         birthday: _selectedBirthday,
-        photoUrl: photoUrl ?? currentUser?.photoUrl,
+        photoUrl: photoUrls.isNotEmpty ? photoUrls.first : currentUser?.photoUrl,
+        photoUrls: photoUrls,
         isProfileComplete: true,
         createdAt: currentUser?.createdAt ?? DateTime.now(),
         interestedIn: currentUser?.interestedIn ?? 'all',
@@ -205,6 +251,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         familyPlans: _selectedFamilyPlans,
         hasKids: _selectedHasKids,
         lookingFor: _selectedLookingFor,
+        latitude: latitude ?? currentUser?.latitude,
+        longitude: longitude ?? currentUser?.longitude,
       );
 
       print('[DEBUG] Updating profile with new fields:');
@@ -223,7 +271,11 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       await ref.read(authProvider.notifier).updateProfile(user);
       
       if (mounted) {
-        setState(() => _isEditing = false);
+        setState(() {
+          _isEditing = false;
+          _photoUrls = photoUrls;
+          _photoFiles = [];
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Profile updated successfully!'),
@@ -250,28 +302,47 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).value;
-    
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'Profile',
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
+      backgroundColor: isDark ? null : colorScheme.surface,
+      body: Container(
+        decoration: isDark
+            ? const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppTheme.darkBackground,
+                    AppTheme.darkBackgroundSecondary,
+                    AppTheme.darkBackground,
+                  ],
+                  stops: [0.0, 0.55, 1.0],
+                ),
+              )
+            : null,
+        child: SafeArea(
+          child: _buildBody(context, theme, colorScheme, user),
         ),
+      ),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text(
+          'Profile',
+          style: theme.appBarTheme.titleTextStyle?.copyWith(fontSize: 24),
+        ),
+        iconTheme: IconThemeData(color: colorScheme.onBackground),
         actions: [
           if (!_isEditing) ...[
             IconButton(
-              icon: const Icon(Icons.edit, color: Colors.black),
+              icon: Icon(Icons.edit, color: colorScheme.onBackground),
               onPressed: () => setState(() => _isEditing = true),
             ),
             IconButton(
-              icon: const Icon(Icons.logout, color: Colors.black),
+              icon: Icon(Icons.logout, color: colorScheme.onBackground),
               onPressed: () async {
                 try {
                   await ref.read(authProvider.notifier).signOut();
@@ -291,91 +362,132 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           ] else ...[
             TextButton(
               onPressed: () => setState(() => _isEditing = false),
-              child: const Text(
+              child: Text(
                 'Cancel',
-                style: TextStyle(color: Colors.black),
+                style: TextStyle(color: colorScheme.onBackground),
               ),
             ),
           ],
         ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
+    );
+  }
+
+  Widget _buildBody(BuildContext context, ThemeData theme, ColorScheme colorScheme, UserModel? user) {
+    return SingleChildScrollView(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).padding.bottom + 80,
+      ),
+      child: Column(
             children: [
-              // Profile Header
-              Container(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    // Profile Image
-                    Stack(
-                      children: [
-                        GestureDetector(
-                          onTap: _isEditing ? _pickImage : null,
-                          child: CircleAvatar(
-                            radius: 60,
-                            backgroundColor: Colors.grey[200],
-                            backgroundImage: _getProfileImage(),
-                            child: _getProfileImage() == null
-                                ? const Icon(Icons.person, size: 60, color: Colors.grey)
-                                : null,
-                          ),
-                        ),
-                        if (_isEditing)
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.purple,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 3),
-                              ),
-                              child: const Icon(
-                                Icons.camera_alt,
-                                color: Colors.white,
-                                size: 20,
+              // Profile Header - Glass
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: GlassContainer(
+                  borderRadius: BorderRadius.circular(24),
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      // Profile Photos (gallery, max 6)
+                      SizedBox(
+                        height: 120,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _allPhotos.length + (_isEditing && _allPhotos.length < _maxPhotos ? 1 : 0),
+                                itemBuilder: (context, index) {
+                                  if (index == _allPhotos.length) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 12),
+                                      child: GestureDetector(
+                                        onTap: _pickImage,
+                                        child: Container(
+                                          width: 100,
+                                          decoration: BoxDecoration(
+                                            color: colorScheme.surface.withOpacity(0.5),
+                                            borderRadius: BorderRadius.circular(16),
+                                            border: Border.all(color: colorScheme.outline, width: 2),
+                                          ),
+                                          child: Icon(Icons.add_a_photo, size: 40, color: colorScheme.onSurface),
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                  final photo = _allPhotos[index];
+                                  final isUrl = photo is String;
+                                  return Padding(
+                                    padding: EdgeInsets.only(right: index == _allPhotos.length - 1 ? 0 : 12),
+                                    child: Stack(
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(16),
+                                          child: isUrl
+                                              ? Image.network(photo as String, width: 100, height: 100, fit: BoxFit.cover)
+                                              : Image.file(photo as File, width: 100, height: 100, fit: BoxFit.cover),
+                                        ),
+                                        if (_isEditing)
+                                          Positioned(
+                                            top: 4,
+                                            right: 4,
+                                            child: GestureDetector(
+                                              onTap: () => _removePhoto(index),
+                                              child: Container(
+                                                padding: const EdgeInsets.all(4),
+                                                decoration: const BoxDecoration(
+                                                  color: Colors.red,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(Icons.close, color: Colors.white, size: 16),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  );
+                                },
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // User Info
-                    Text(
-                      user?.name ?? 'Unknown',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${_calculateAge(_selectedBirthday)} years old • ${_selectedGender.capitalize()}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey[600],
+                      const SizedBox(height: 16),
+                      
+                      // User Info
+                      Text(
+                        user?.name ?? 'Unknown',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onBackground,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_calculateAge(_selectedBirthday)} years old • ${_selectedGender.capitalize()}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: colorScheme.onBackground.withOpacity(0.8),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+              const SizedBox(height: 16),
 
               // Profile Content
               if (_isEditing) ...[
                 // Edit Mode
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
                   child: Form(
                     key: _formKey,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Bio',
                           child: TextFormField(
                             controller: _bioController,
@@ -397,17 +509,21 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Gender',
                           child: DropdownButtonFormField<String>(
                             value: _selectedGender,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              fillColor: colorScheme.surface,
+                              border: const OutlineInputBorder(),
+                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                             ),
-                            items: const [
-                              DropdownMenuItem(value: 'male', child: Text('Male')),
-                              DropdownMenuItem(value: 'female', child: Text('Female')),
-                              DropdownMenuItem(value: 'other', child: Text('Other')),
+                            dropdownColor: colorScheme.surface,
+                            style: TextStyle(color: colorScheme.onSurface),
+                            items: [
+                              DropdownMenuItem(value: 'male', child: Text('Male', style: TextStyle(color: colorScheme.onSurface))),
+                              DropdownMenuItem(value: 'female', child: Text('Female', style: TextStyle(color: colorScheme.onSurface))),
+                              DropdownMenuItem(value: 'other', child: Text('Other', style: TextStyle(color: colorScheme.onSurface))),
                             ],
                             onChanged: (value) {
                               if (value != null) {
@@ -417,91 +533,103 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Birthday',
-                          child: InkWell(
-                            onTap: _selectDate,
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Row(
+                          child: Builder(
+                            builder: (ctx) {
+                              final cs = Theme.of(ctx).colorScheme;
+                              return InkWell(
+                                onTap: _selectDate,
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: cs.surface,
+                                    border: Border.all(color: cs.outline),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        DateFormat('dd/MM/yyyy').format(_selectedBirthday),
+                                        style: TextStyle(fontSize: 16, color: cs.onSurface),
+                                      ),
+                                      const Spacer(),
+                                      Icon(Icons.calendar_today, color: cs.onSurface),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildEditField(context,
+                          label: 'Interests',
+                          child: Builder(
+                            builder: (ctx) {
+                              final cs = Theme.of(ctx).colorScheme;
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    DateFormat('dd/MM/yyyy').format(_selectedBirthday),
-                                    style: const TextStyle(fontSize: 16),
+                                    'Select your interests (optional)',
+                                    style: TextStyle(fontSize: 14, color: cs.outline),
                                   ),
-                                  const Spacer(),
-                                  const Icon(Icons.calendar_today),
+                                  const SizedBox(height: 12),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: _availableInterests.map((interest) {
+                                      final isSelected = _selectedInterests.contains(interest);
+                                      return GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            if (isSelected) {
+                                              _selectedInterests.remove(interest);
+                                            } else {
+                                              _selectedInterests.add(interest);
+                                            }
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: isSelected ? cs.primary : cs.surfaceContainerHighest,
+                                            borderRadius: BorderRadius.circular(16),
+                                            border: Border.all(
+                                              color: isSelected ? cs.primary : cs.outline,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            interest,
+                                            style: TextStyle(
+                                              color: isSelected ? cs.onPrimary : cs.onSurface,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
                                 ],
-                              ),
-                            ),
+                              );
+                            },
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildEditField(
-                          label: 'Interests',
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Select your interests (optional)',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: _availableInterests.map((interest) {
-                                  final isSelected = _selectedInterests.contains(interest);
-                                  return GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        if (isSelected) {
-                                          _selectedInterests.remove(interest);
-                                        } else {
-                                          _selectedInterests.add(interest);
-                                        }
-                                      });
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: isSelected ? Colors.purple : Colors.grey[200],
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(
-                                          color: isSelected ? Colors.purple : Colors.grey[300]!,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        interest,
-                                        style: TextStyle(
-                                          color: isSelected ? Colors.white : Colors.black,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Education',
                           child: DropdownButtonFormField<String>(
                             value: _selectedEducation,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              fillColor: colorScheme.surface,
+                              border: const OutlineInputBorder(),
+                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                             ),
+                            dropdownColor: colorScheme.surface,
+                            style: TextStyle(color: colorScheme.onSurface),
                             items: _educationOptions.map((option) {
-                              return DropdownMenuItem(value: option, child: Text(option));
+                              return DropdownMenuItem(value: option, child: Text(option, style: TextStyle(color: colorScheme.onSurface)));
                             }).toList(),
                             onChanged: (value) {
                               if (value != null) {
@@ -511,15 +639,19 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Political Views',
                           child: DropdownButtonFormField<String>(
                             value: _selectedPoliticalViews,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              fillColor: colorScheme.surface,
+                              border: const OutlineInputBorder(),
+                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                             ),
+                            dropdownColor: colorScheme.surface,
+                            style: TextStyle(color: colorScheme.onSurface),
                             items: _politicalViewsOptions.map((option) {
-                              return DropdownMenuItem(value: option, child: Text(option));
+                              return DropdownMenuItem(value: option, child: Text(option, style: TextStyle(color: colorScheme.onSurface)));
                             }).toList(),
                             onChanged: (value) {
                               if (value != null) {
@@ -529,15 +661,19 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Exercise',
                           child: DropdownButtonFormField<String>(
                             value: _selectedExercise,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              fillColor: colorScheme.surface,
+                              border: const OutlineInputBorder(),
+                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                             ),
+                            dropdownColor: colorScheme.surface,
+                            style: TextStyle(color: colorScheme.onSurface),
                             items: _exerciseOptions.map((option) {
-                              return DropdownMenuItem(value: option, child: Text(option));
+                              return DropdownMenuItem(value: option, child: Text(option, style: TextStyle(color: colorScheme.onSurface)));
                             }).toList(),
                             onChanged: (value) {
                               if (value != null) {
@@ -547,15 +683,19 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Smoking',
                           child: DropdownButtonFormField<String>(
                             value: _selectedSmoking,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              fillColor: colorScheme.surface,
+                              border: const OutlineInputBorder(),
+                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                             ),
+                            dropdownColor: colorScheme.surface,
+                            style: TextStyle(color: colorScheme.onSurface),
                             items: _smokingOptions.map((option) {
-                              return DropdownMenuItem(value: option, child: Text(option));
+                              return DropdownMenuItem(value: option, child: Text(option, style: TextStyle(color: colorScheme.onSurface)));
                             }).toList(),
                             onChanged: (value) {
                               if (value != null) {
@@ -565,15 +705,19 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Drinking',
                           child: DropdownButtonFormField<String>(
                             value: _selectedDrinking,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              fillColor: colorScheme.surface,
+                              border: const OutlineInputBorder(),
+                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                             ),
+                            dropdownColor: colorScheme.surface,
+                            style: TextStyle(color: colorScheme.onSurface),
                             items: _drinkingOptions.map((option) {
-                              return DropdownMenuItem(value: option, child: Text(option));
+                              return DropdownMenuItem(value: option, child: Text(option, style: TextStyle(color: colorScheme.onSurface)));
                             }).toList(),
                             onChanged: (value) {
                               if (value != null) {
@@ -583,15 +727,19 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Star Sign',
                           child: DropdownButtonFormField<String>(
                             value: _selectedStarSign,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              fillColor: colorScheme.surface,
+                              border: const OutlineInputBorder(),
+                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                             ),
+                            dropdownColor: colorScheme.surface,
+                            style: TextStyle(color: colorScheme.onSurface),
                             items: _starSignOptions.map((option) {
-                              return DropdownMenuItem(value: option, child: Text(option));
+                              return DropdownMenuItem(value: option, child: Text(option, style: TextStyle(color: colorScheme.onSurface)));
                             }).toList(),
                             onChanged: (value) {
                               if (value != null) {
@@ -601,15 +749,19 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Religion',
                           child: DropdownButtonFormField<String>(
                             value: _selectedReligion,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              fillColor: colorScheme.surface,
+                              border: const OutlineInputBorder(),
+                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                             ),
+                            dropdownColor: colorScheme.surface,
+                            style: TextStyle(color: colorScheme.onSurface),
                             items: _religionOptions.map((option) {
-                              return DropdownMenuItem(value: option, child: Text(option));
+                              return DropdownMenuItem(value: option, child: Text(option, style: TextStyle(color: colorScheme.onSurface)));
                             }).toList(),
                             onChanged: (value) {
                               if (value != null) {
@@ -619,15 +771,19 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Family Plans',
                           child: DropdownButtonFormField<String>(
                             value: _selectedFamilyPlans,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              fillColor: colorScheme.surface,
+                              border: const OutlineInputBorder(),
+                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                             ),
+                            dropdownColor: colorScheme.surface,
+                            style: TextStyle(color: colorScheme.onSurface),
                             items: _familyPlansOptions.map((option) {
-                              return DropdownMenuItem(value: option, child: Text(option));
+                              return DropdownMenuItem(value: option, child: Text(option, style: TextStyle(color: colorScheme.onSurface)));
                             }).toList(),
                             onChanged: (value) {
                               if (value != null) {
@@ -637,15 +793,19 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Has Kids',
                           child: DropdownButtonFormField<String>(
                             value: _selectedHasKids,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              fillColor: colorScheme.surface,
+                              border: const OutlineInputBorder(),
+                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                             ),
+                            dropdownColor: colorScheme.surface,
+                            style: TextStyle(color: colorScheme.onSurface),
                             items: _hasKidsOptions.map((option) {
-                              return DropdownMenuItem(value: option, child: Text(option));
+                              return DropdownMenuItem(value: option, child: Text(option, style: TextStyle(color: colorScheme.onSurface)));
                             }).toList(),
                             onChanged: (value) {
                               if (value != null) {
@@ -655,15 +815,19 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Looking For',
                           child: DropdownButtonFormField<String>(
                             value: _selectedLookingFor,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
+                            decoration: InputDecoration(
+                              fillColor: colorScheme.surface,
+                              border: const OutlineInputBorder(),
+                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: colorScheme.outline)),
                             ),
+                            dropdownColor: colorScheme.surface,
+                            style: TextStyle(color: colorScheme.onSurface),
                             items: _lookingForOptions.map((option) {
-                              return DropdownMenuItem(value: option, child: Text(option));
+                              return DropdownMenuItem(value: option, child: Text(option, style: TextStyle(color: colorScheme.onSurface)));
                             }).toList(),
                             onChanged: (value) {
                               if (value != null) {
@@ -673,7 +837,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildEditField(
+                        _buildEditField(context,
                           label: 'Height Range (cm)',
                           child: Column(
                             children: [
@@ -694,7 +858,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                                 '${_heightRange.start.round()}cm - ${_heightRange.end.round()}cm',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.grey[600],
+                                  color: colorScheme.onSurface,
                                 ),
                               ),
                             ],
@@ -704,8 +868,8 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                         ElevatedButton(
                           onPressed: _isLoading ? null : _saveProfile,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.purple,
-                            foregroundColor: Colors.white,
+                            backgroundColor: colorScheme.primary,
+                            foregroundColor: colorScheme.onPrimary,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -734,33 +898,29 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                 ),
               ] else ...[
                 // View Mode
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (user?.bio != null && user!.bio!.isNotEmpty) ...[
-                        const Text(
+                        Text(
                           'About',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                            color: colorScheme.onBackground,
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Container(
+                        GlassContainer(
+                          borderRadius: BorderRadius.circular(16),
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[50],
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey[200]!),
-                          ),
                           child: Text(
                             user.bio!,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
-                              color: Colors.black87,
+                              color: colorScheme.onBackground,
                               height: 1.4,
                             ),
                           ),
@@ -770,12 +930,12 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                       
                       // Interests Section
                       if (user?.interests.isNotEmpty == true) ...[
-                        const Text(
+                        Text(
                           'Interests',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                            color: colorScheme.onBackground,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -786,14 +946,14 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                             return Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: Colors.purple.withOpacity(0.1),
+                                color: colorScheme.primary.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.purple.withOpacity(0.3)),
+                                border: Border.all(color: colorScheme.primary.withOpacity(0.4)),
                               ),
                               child: Text(
                                 interest,
-                                style: const TextStyle(
-                                  color: Colors.purple,
+                                style: TextStyle(
+                                  color: colorScheme.onBackground,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -808,34 +968,30 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           user?.smoking != null || user?.drinking != null || user?.starSign != null || 
                           user?.religion != null || user?.familyPlans != null || user?.hasKids != null || 
                           user?.lookingFor != null) ...[
-                        const Text(
+                        Text(
                           'About Me',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                            color: colorScheme.onBackground,
                           ),
                         ),
                         const SizedBox(height: 16),
-                        Container(
+                        GlassContainer(
+                          borderRadius: BorderRadius.circular(16),
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[50],
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey[200]!),
-                          ),
                           child: Column(
                             children: [
-                              if (user?.education != null) _buildProfileInfo('Education', user!.education!),
-                              if (user?.politicalViews != null) _buildProfileInfo('Political Views', user!.politicalViews!),
-                              if (user?.exercise != null) _buildProfileInfo('Exercise', user!.exercise!),
-                              if (user?.smoking != null) _buildProfileInfo('Smoking', user!.smoking!),
-                              if (user?.drinking != null) _buildProfileInfo('Drinking', user!.drinking!),
-                              if (user?.starSign != null) _buildProfileInfo('Star Sign', user!.starSign!),
-                              if (user?.religion != null) _buildProfileInfo('Religion', user!.religion!),
-                              if (user?.familyPlans != null) _buildProfileInfo('Family Plans', user!.familyPlans!),
-                              if (user?.hasKids != null) _buildProfileInfo('Has Kids', user!.hasKids!),
-                              if (user?.lookingFor != null) _buildProfileInfo('Looking For', user!.lookingFor!),
+                              if (user?.education != null) _buildProfileInfo(context, 'Education', user!.education!),
+                              if (user?.politicalViews != null) _buildProfileInfo(context, 'Political Views', user!.politicalViews!),
+                              if (user?.exercise != null) _buildProfileInfo(context, 'Exercise', user!.exercise!),
+                              if (user?.smoking != null) _buildProfileInfo(context, 'Smoking', user!.smoking!),
+                              if (user?.drinking != null) _buildProfileInfo(context, 'Drinking', user!.drinking!),
+                              if (user?.starSign != null) _buildProfileInfo(context, 'Star Sign', user!.starSign!),
+                              if (user?.religion != null) _buildProfileInfo(context, 'Religion', user!.religion!),
+                              if (user?.familyPlans != null) _buildProfileInfo(context, 'Family Plans', user!.familyPlans!),
+                              if (user?.hasKids != null) _buildProfileInfo(context, 'Has Kids', user!.hasKids!),
+                              if (user?.lookingFor != null) _buildProfileInfo(context, 'Looking For', user!.lookingFor!),
                             ],
                           ),
                         ),
@@ -843,19 +999,102 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                       ],
                       
                       // Stats Section
-                      Container(
+                      GlassContainer(
+                        borderRadius: BorderRadius.circular(20),
                         padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[50],
-                          borderRadius: BorderRadius.circular(16),
-                        ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            _buildStat('Age', '${_calculateAge(_selectedBirthday)}'),
-                            _buildStat('Gender', _selectedGender.capitalize()),
-                            _buildStat('Member Since', DateFormat('MMM yyyy').format(user?.createdAt ?? DateTime.now())),
+                            _buildStat(context, 'Age', '${_calculateAge(_selectedBirthday)}'),
+                            _buildStat(context, 'Gender', _selectedGender.capitalize()),
+                            _buildStat(context, 'Member Since', DateFormat('MMM yyyy').format(user?.createdAt ?? DateTime.now())),
                           ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Theme (Light / Dark / System)
+                      GlassContainer(
+                        borderRadius: BorderRadius.circular(20),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Appearance',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.onBackground,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            ref.watch(themeModeProvider).when(
+                              data: (mode) => SegmentedButton<ThemeMode>(
+                                segments: const [
+                                  ButtonSegment(value: ThemeMode.light, label: Text('Light'), icon: Icon(Icons.light_mode)),
+                                  ButtonSegment(value: ThemeMode.dark, label: Text('Dark'), icon: Icon(Icons.dark_mode)),
+                                  ButtonSegment(value: ThemeMode.system, label: Text('System'), icon: Icon(Icons.brightness_auto)),
+                                ],
+                                selected: {mode},
+                                onSelectionChanged: (Set<ThemeMode> selected) {
+                                  ref.read(themeModeProvider.notifier).setThemeMode(selected.first);
+                                },
+                              ),
+                              loading: () => const SizedBox(height: 40),
+                              error: (_, __) => const SizedBox.shrink(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Pause / Incognito
+                      GlassContainer(
+                        borderRadius: BorderRadius.circular(20),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Column(
+                          children: [
+                            SwitchListTile(
+                              title: Text(
+                                'Pause account',
+                                style: TextStyle(color: colorScheme.onBackground, fontSize: 16),
+                              ),
+                              subtitle: Text(
+                                'Hide your profile from discovery',
+                                style: TextStyle(color: colorScheme.onBackground.withOpacity(0.7), fontSize: 12),
+                              ),
+                              value: user?.isPaused ?? false,
+                              onChanged: user != null
+                                  ? (value) => _setPausedOrIncognito(isPaused: value)
+                                  : null,
+                              activeColor: colorScheme.primary,
+                            ),
+                            Divider(color: colorScheme.outline, height: 1),
+                            SwitchListTile(
+                              title: Text(
+                                'Incognito',
+                                style: TextStyle(color: colorScheme.onBackground, fontSize: 16),
+                              ),
+                              subtitle: Text(
+                                'Browse without being seen in discovery',
+                                style: TextStyle(color: colorScheme.onBackground.withOpacity(0.7), fontSize: 12),
+                              ),
+                              value: user?.isIncognito ?? false,
+                              onChanged: user != null
+                                  ? (value) => _setPausedOrIncognito(isIncognito: value)
+                                  : null,
+                              activeColor: colorScheme.primary,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      // Delete Account
+                      TextButton.icon(
+                        onPressed: () => _showDeleteAccountDialog(user?.id),
+                        icon: const Icon(Icons.delete_forever, color: Colors.red, size: 20),
+                        label: const Text(
+                          'Delete Account',
+                          style: TextStyle(color: Colors.red, fontSize: 14),
                         ),
                       ),
                     ],
@@ -866,21 +1105,20 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               const SizedBox(height: 32),
             ],
           ),
-        ),
-      ),
-    );
+        );
   }
 
-  Widget _buildEditField({required String label, required Widget child}) {
+  Widget _buildEditField(BuildContext context, {required String label, required Widget child}) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            color: Colors.black,
+            color: colorScheme.onBackground,
           ),
         ),
         const SizedBox(height: 8),
@@ -889,15 +1127,16 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     );
   }
 
-  Widget _buildStat(String label, String value) {
+  Widget _buildStat(BuildContext context, String label, String value) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: Colors.purple,
+            color: colorScheme.primary,
           ),
         ),
         const SizedBox(height: 4),
@@ -905,14 +1144,15 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
           label,
           style: TextStyle(
             fontSize: 14,
-            color: Colors.grey[600],
+            color: colorScheme.onBackground.withOpacity(0.8),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildProfileInfo(String label, String value) {
+  Widget _buildProfileInfo(BuildContext context, String label, String value) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -925,18 +1165,115 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[700],
+                color: colorScheme.onBackground.withOpacity(0.8),
               ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: Colors.black87,
+                color: colorScheme.onBackground,
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _setPausedOrIncognito({bool? isPaused, bool? isIncognito}) async {
+    final user = ref.read(authProvider).valueOrNull;
+    if (user == null) return;
+    final updated = user.copyWith(
+      isPaused: isPaused ?? user.isPaused,
+      isIncognito: isIncognito ?? user.isIncognito,
+    );
+    try {
+      await ref.read(authProvider.notifier).updateProfile(updated);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isPaused != null
+                ? (isPaused ? 'Account paused' : 'Account resumed')
+                : (isIncognito == true ? 'Incognito on' : 'Incognito off')),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _showDeleteAccountDialog(String? userId) {
+    if (userId == null) return;
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    final needsPassword = firebaseUser?.providerData.any((p) => p.providerId == 'password') ?? false;
+    final passwordController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This will permanently delete your account and all your data. This cannot be undone.',
+              style: TextStyle(fontSize: 14),
+            ),
+            if (needsPassword) ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  hintText: 'Enter your password to confirm',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final password = needsPassword ? passwordController.text.trim() : null;
+              if (needsPassword && (password == null || password.isEmpty)) return;
+              Navigator.pop(ctx);
+              setState(() => _isLoading = true);
+              try {
+                await ref.read(authProvider.notifier).deleteAccount(password: password);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Account deleted'), backgroundColor: Colors.green),
+                  );
+                  context.go('/login');
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete account: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              } finally {
+                if (mounted) setState(() => _isLoading = false);
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete Account'),
           ),
         ],
       ),
@@ -953,12 +1290,10 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   }
 
   ImageProvider? _getProfileImage() {
-    if (_imageFile != null) {
-      return FileImage(_imageFile!);
-    }
-    final currentUser = ref.read(authProvider).value;
-    if (currentUser?.photoUrl != null && currentUser!.photoUrl!.isNotEmpty) {
-      return NetworkImage(currentUser.photoUrl!);
+    if (_allPhotos.isNotEmpty) {
+      final first = _allPhotos.first;
+      if (first is File) return FileImage(first);
+      if (first is String) return NetworkImage(first);
     }
     return null;
   }

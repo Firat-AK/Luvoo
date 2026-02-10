@@ -1,0 +1,15 @@
+rules_version = '2';
+// Firebase Storage: profile photos + chat message images
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Profile images – only the user can write their own
+    match /profile_images/{userId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Chat images – any authenticated user (app ensures chat membership)
+    match /chats/{chatId}/messages/{messageId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

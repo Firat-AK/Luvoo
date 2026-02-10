@@ -139,7 +139,8 @@ class TestUsersGenerator {
       bio: _getRandomElement(_bioOptions),
       gender: gender,
       birthday: birthday,
-      photoUrl: 'assets/images/meganfox.jpg', // Using meganfox.jpg as requested
+      photoUrl: 'assets/images/meganfox.jpg',
+      photoUrls: ['assets/images/meganfox.jpg'], // Primary photo
       isProfileComplete: true,
       createdAt: DateTime.now().subtract(Duration(days: _random.nextInt(365))),
       interestedIn: _random.nextBool() ? 'all' : (gender == 'female' ? 'male' : 'female'),

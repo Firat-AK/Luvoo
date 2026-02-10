@@ -16,7 +16,8 @@ class UserModel with _$UserModel {
     String? bio,
     required String gender,
     required DateTime birthday,
-    String? photoUrl,
+    String? photoUrl, // Deprecated - use photoUrls[0]. Kept for backward compatibility.
+    @Default([]) List<String> photoUrls, // Up to 6 photos. First one is primary.
     @Default(false) bool isProfileComplete,
     @JsonKey(fromJson: _dateTimeFromTimestamp, toJson: _dateTimeToTimestamp)
     required DateTime createdAt,
@@ -38,10 +39,43 @@ class UserModel with _$UserModel {
     String? hasKids, // 'Have kids', 'Don\'t have kids'
     String? lookingFor, // 'A long-term relationship', 'Fun, casual dates', 'Marriage', 'Intimacy, without commitment', 'A life partner', 'Ethical non-monogamy'
     List<int>? heightRange, // [minHeight, maxHeight] in cm
+
+    // Location for distance filtering
+    double? latitude,
+    double? longitude,
+
+    // Pause / Incognito – hide profile from discovery
+    @Default(false) bool isPaused,
+    @Default(false) bool isIncognito,
   }) = _UserModel;
 
-  factory UserModel.fromJson(Map<String, dynamic> json) =>
-      _$UserModelFromJson(json);
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    // Migration: old users have photoUrl but not photoUrls
+    final data = Map<String, dynamic>.from(json);
+    final urls = (data['photoUrls'] as List<dynamic>?)?.map((e) => e.toString()).toList();
+    if ((urls == null || urls.isEmpty) && data['photoUrl'] != null) {
+      data['photoUrls'] = [data['photoUrl'] as String];
+    }
+    data['isPaused'] ??= false;
+    data['isIncognito'] ??= false;
+    if (data['birthday'] is Timestamp) {
+      data['birthday'] =
+          (data['birthday'] as Timestamp).toDate().toIso8601String();
+    }
+    return _$$UserModelImplFromJson(data);
+  }
+}
+
+// toJson (freezed doesn't generate it when fromJson is custom)
+extension UserModelJsonX on UserModel {
+  Map<String, dynamic> toJson() =>
+      _$$UserModelImplToJson(this as _$UserModelImpl);
+}
+
+// Helper to get primary photo URL (first in gallery or legacy photoUrl)
+extension UserModelPhotoX on UserModel {
+  String? get primaryPhotoUrl =>
+      photoUrls.isNotEmpty ? photoUrls.first : photoUrl;
 }
 
 // Extension methods for UserModel

@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B0F1A"/>
+      <stop offset="1" stop-color="#0A1422"/>
+    </linearGradient>
+
+    <radialGradient id="heroGlow" cx="65%" cy="25%" r="70%">
+      <stop offset="0" stop-color="#A78BFA" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#A78BFA" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="shadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+
+    <linearGradient id="glassStroke" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.12"/>
+    </linearGradient>
+    <linearGradient id="glassFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="390" height="844" fill="url(#bg)"/>
+  <rect width="390" height="420" fill="#111827" opacity="0.35"/>
+  <rect width="390" height="844" fill="url(#heroGlow)"/>
+
+  <!-- top actions -->
+  <g filter="url(#shadow)">
+    <rect x="18" y="54" width="354" height="48" rx="18" fill="url(#glassFill)" stroke="url(#glassStroke)" stroke-width="1"/>
+    <text x="40" y="84" font-family="ui-sans-serif, -apple-system" font-size="14" fill="#E5E7EB" opacity="0.9">Geri</text>
+    <text x="332" y="84" font-family="ui-sans-serif, -apple-system" font-size="14" fill="#E5E7EB" opacity="0.9" text-anchor="end">⋯</text>
+  </g>
+
+  <!-- hero placeholder -->
+  <text x="24" y="180" font-family="ui-sans-serif, -apple-system" font-size="12" fill="#E5E7EB" opacity="0.65">Foto alanı (hero)</text>
+
+  <!-- glass info sheet -->
+  <g filter="url(#shadow)">
+    <rect x="18" y="380" width="354" height="430" rx="30" fill="url(#glassFill)" stroke="url(#glassStroke)" stroke-width="1"/>
+    <text x="40" y="430" font-family="ui-sans-serif, -apple-system" font-size="22" fill="#F9FAFB">Sinem, 25</text>
+    <text x="40" y="456" font-family="ui-sans-serif, -apple-system" font-size="12" fill="#E5E7EB" opacity="0.75">İstanbul • 3 km • Online</text>
+
+    <!-- tags -->
+    <g>
+      <rect x="40" y="478" width="92" height="28" rx="14" fill="#FFFFFF" opacity="0.10" stroke="#FFFFFF" stroke-opacity="0.16"/>
+      <text x="54" y="497" font-family="ui-sans-serif, -apple-system" font-size="12" fill="#E5E7EB">Kahve</text>
+
+      <rect x="140" y="478" width="78" height="28" rx="14" fill="#FFFFFF" opacity="0.10" stroke="#FFFFFF" stroke-opacity="0.16"/>
+      <text x="154" y="497" font-family="ui-sans-serif, -apple-system" font-size="12" fill="#E5E7EB">Film</text>
+
+      <rect x="226" y="478" width="98" height="28" rx="14" fill="#FFFFFF" opacity="0.10" stroke="#FFFFFF" stroke-opacity="0.16"/>
+      <text x="240" y="497" font-family="ui-sans-serif, -apple-system" font-size="12" fill="#E5E7EB">Seyahat</text>
+    </g>
+
+    <!-- bio -->
+    <text x="40" y="538" font-family="ui-sans-serif, -apple-system" font-size="13" fill="#E5E7EB" opacity="0.92">
+      Bio: Yeni yerler keşfetmeyi seviyorum. 
+    </text>
+    <text x="40" y="560" font-family="ui-sans-serif, -apple-system" font-size="13" fill="#E5E7EB" opacity="0.92">
+      Hafta sonu kahve + yürüyüş?
+    </text>
+
+    <!-- buttons -->
+    <g>
+      <rect x="40" y="610" width="150" height="48" rx="18" fill="#FFFFFF" opacity="0.10" stroke="#FFFFFF" stroke-opacity="0.20"/>
+      <text x="88" y="640" font-family="ui-sans-serif, -apple-system" font-size="14" fill="#E5E7EB">Mesaj</text>
+
+      <rect x="202" y="610" width="150" height="48" rx="18" fill="#FFFFFF" opacity="0.14" stroke="#FFFFFF" stroke-opacity="0.22"/>
+      <text x="252" y="640" font-family="ui-sans-serif, -apple-system" font-size="14" fill="#E5E7EB">Beğen</text>
+    </g>
+
+    <!-- secondary -->
+    <rect x="40" y="680" width="312" height="1" fill="#FFFFFF" opacity="0.10"/>
+    <text x="40" y="712" font-family="ui-sans-serif, -apple-system" font-size="12" fill="#E5E7EB" opacity="0.70">Daha fazla foto • Ortak ilgi alanları • Raporla</text>
+  </g>
+</svg>
