@@ -6,16 +6,23 @@ import 'package:luvoo/features/onboarding/screens/onboarding_screen.dart';
 import 'package:luvoo/features/auth/screens/login_screen.dart';
 import 'package:luvoo/features/auth/screens/register_screen.dart';
 import 'package:luvoo/features/profile/screens/profile_setup_screen.dart';
+import 'package:luvoo/features/profile/screens/face_verification_screen.dart';
 import 'package:luvoo/features/discovery/screens/profile_detail_screen.dart';
 import 'package:luvoo/features/chat/screens/chat_screen.dart';
+import 'package:luvoo/features/chat/screens/video_call_screen.dart';
 import 'package:luvoo/features/main/screens/main_screen.dart';
 import 'package:luvoo/features/discovery/screens/filter_screen.dart';
 import 'package:luvoo/features/admin/screens/admin_screen.dart';
 
+/// Root navigator key so we can show dialogs (e.g. incoming call) from anywhere.
+final rootNavigatorKeyProvider = Provider<GlobalKey<NavigatorState>>((ref) => GlobalKey<NavigatorState>());
+
 final routerProvider = Provider<GoRouter>((ref) {
   final firebaseService = ref.watch(firebaseServiceProvider);
-  
+  final navigatorKey = ref.watch(rootNavigatorKeyProvider);
+
   return GoRouter(
+    navigatorKey: navigatorKey,
     initialLocation: '/',
     redirect: (context, state) async {
       final location = state.matchedLocation;
@@ -81,12 +88,27 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/video-call/:chatId',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          return VideoCallScreen(
+            chatId: state.pathParameters['chatId']!,
+            otherUserName: extra['otherUserName'] as String? ?? 'Video Call',
+            isInitiator: extra['isInitiator'] as bool? ?? true,
+          );
+        },
+      ),
+      GoRoute(
         path: '/filter',
         builder: (context, state) => const FilterScreen(),
       ),
       GoRoute(
         path: '/admin',
         builder: (context, state) => const AdminScreen(),
+      ),
+      GoRoute(
+        path: '/face-verification',
+        builder: (context, state) => const FaceVerificationScreen(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

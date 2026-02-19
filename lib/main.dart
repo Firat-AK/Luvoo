@@ -8,6 +8,7 @@ import 'package:luvoo/core/theme/app_theme.dart';
 import 'package:luvoo/core/theme/theme_provider.dart';
 import 'package:luvoo/firebase_options.dart';
 import 'package:luvoo/features/auth/providers/auth_provider.dart';
+import 'package:luvoo/features/chat/widgets/incoming_call_overlay.dart';
 import 'package:luvoo/routes/app_router.dart';
 
 /// Background message handler (must be top-level).
@@ -95,6 +96,9 @@ class _MyAppState extends ConsumerState<MyApp> {
       darkTheme: AppTheme.dark,
       themeMode: themeMode,
       routerConfig: router,
+      builder: (context, child) => IncomingCallOverlay(
+        child: child ?? const SizedBox.shrink(),
+      ),
     );
   }
 }

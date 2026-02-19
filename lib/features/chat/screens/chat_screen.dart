@@ -10,6 +10,7 @@ import 'package:luvoo/models/message_model.dart';
 import 'package:luvoo/models/user_model.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 final messagesProvider = StreamProvider.family<List<MessageModel>, String>((ref, chatId) {
   return ref.watch(firebaseServiceProvider).getChatMessages(chatId);
@@ -139,6 +140,83 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
+  Future<void> _startVideoCall(
+    AsyncValue<List<UserModel?>> chatUsersAsync,
+    UserModel? currentUser,
+  ) async {
+    if (currentUser == null) return;
+    final users = chatUsersAsync.valueOrNull;
+    if (users == null || users.length < 2) return;
+    final otherUser = users.firstWhere(
+      (u) => u != null && u.id != currentUser.id,
+      orElse: () => null,
+    );
+    if (otherUser == null) return;
+
+    // Request camera & mic first so iOS shows the permission dialog (and adds them to Settings)
+    final camera = await Permission.camera.request();
+    final microphone = await Permission.microphone.request();
+    if (!camera.isGranted || !microphone.isGranted) {
+      if (mounted) {
+        final openSettings = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Video call needs camera & microphone'),
+            content: const Text(
+              'Please allow access when the phone asks. If you already denied, open Settings and enable Camera and Microphone for Luvoo.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('OK'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Open Settings'),
+              ),
+            ],
+          ),
+        );
+        if (openSettings == true) await openAppSettings();
+      }
+      return;
+    }
+
+    try {
+      // DEBUG: chatId = Agora channel name; token must be generated for this ID in Agora Console
+      debugPrint('[VideoCall] Starting call — chatId (channel): ${widget.chatId}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Channel: ${widget.chatId}'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      await ref.read(firebaseServiceProvider).createCall(
+            chatId: widget.chatId,
+            callerId: currentUser.id,
+            calleeId: otherUser.id,
+            callerName: currentUser.name ?? 'Unknown',
+          );
+      if (mounted) {
+        context.push(
+          '/video-call/${widget.chatId}',
+          extra: {
+            'otherUserName': otherUser.name ?? 'Unknown',
+            'isInitiator': true,
+          },
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
@@ -232,7 +310,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.videocam, color: Colors.black),
-            onPressed: () {},
+            onPressed: () => _startVideoCall(chatUsersAsync, currentUser),
           ),
           IconButton(
             icon: const Icon(Icons.more_vert, color: Colors.black),

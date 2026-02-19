@@ -56,7 +56,9 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>This app needs access to save photos to your library.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs access to your camera to take profile pictures.</string>
+	<string>This app needs access to your camera for profile pictures and video calls.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Luvoo needs microphone access for video calls.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Luvoo uses your location to show you people nearby and filter matches by distance.</string>
 	<key>CFBundleURLTypes</key>

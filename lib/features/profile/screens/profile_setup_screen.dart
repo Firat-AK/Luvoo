@@ -477,6 +477,67 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
               ),
               const SizedBox(height: 16),
 
+              // Face Verification
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: InkWell(
+                  onTap: user?.faceVerified == true ? null : () => context.push('/face-verification'),
+                  borderRadius: BorderRadius.circular(16),
+                  child: GlassContainer(
+                    borderRadius: BorderRadius.circular(16),
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.face_retouching_natural, color: colorScheme.primary, size: 28),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    'Verify Face',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: colorScheme.onBackground,
+                                    ),
+                                  ),
+                                  if (user?.faceVerified == true) ...[
+                                    const SizedBox(width: 8),
+                                    Icon(Icons.verified, color: Colors.green, size: 18),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                user?.faceVerified == true
+                                    ? 'Verified'
+                                    : 'Prove you\'re real with FaceTec',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: colorScheme.onBackground.withOpacity(0.7),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.chevron_right, color: colorScheme.onBackground.withOpacity(0.5)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
               // Profile Content
               if (_isEditing) ...[
                 // Edit Mode

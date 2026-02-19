@@ -80,6 +80,14 @@ service cloud.firestore {
       allow update: if false;
     }
 
+    // Video calls
+    match /calls/{callId} {
+      allow create: if request.auth != null && request.resource.data.callerId == request.auth.uid;
+      allow read: if request.auth != null && (resource.data.callerId == request.auth.uid || resource.data.calleeId == request.auth.uid);
+      allow update: if request.auth != null && (resource.data.callerId == request.auth.uid || resource.data.calleeId == request.auth.uid);
+      allow delete: if request.auth != null;
+    }
+
     // Chat Messages - delete allowed for account deletion
     match /chats/{chatId}/messages/{messageId} {
       allow read: if request.auth != null && get(/databases/$(database)/documents/chats/$(chatId)).data.users is list && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.users;

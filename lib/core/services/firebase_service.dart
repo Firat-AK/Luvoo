@@ -433,6 +433,10 @@ class FirebaseService {
   }
 
   /// Update only the user's location (for quick updates without full profile save).
+  Future<void> updateUserFields(String userId, Map<String, dynamic> data) async {
+    await _firestore.collection('users').doc(userId).update(data);
+  }
+
   Future<void> updateUserLocation(String userId, double latitude, double longitude) async {
     try {
       await _firestore.collection('users').doc(userId).update({
@@ -1026,6 +1030,60 @@ class FirebaseService {
           }
           return result;
         });
+  }
+
+  // Video call signaling
+  Future<void> createCall({
+    required String chatId,
+    required String callerId,
+    required String calleeId,
+    required String callerName,
+  }) async {
+    await _firestore.collection('calls').doc(chatId).set({
+      'chatId': chatId,
+      'channelName': chatId,
+      'callerId': callerId,
+      'calleeId': calleeId,
+      'callerName': callerName,
+      'status': 'ringing',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> updateCallStatus(String chatId, String status) async {
+    await _firestore.collection('calls').doc(chatId).update({'status': status});
+  }
+
+  Stream<Map<String, dynamic>?> listenToCall(String chatId) {
+    return _firestore.collection('calls').doc(chatId).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      final data = Map<String, dynamic>.from(doc.data()!);
+      if (data['createdAt'] is Timestamp) {
+        data['createdAt'] = (data['createdAt'] as Timestamp).toDate();
+      }
+      return {'id': doc.id, ...data};
+    });
+  }
+
+  Stream<Map<String, dynamic>?> listenToIncomingCalls(String calleeId) {
+    return _firestore
+        .collection('calls')
+        .where('calleeId', isEqualTo: calleeId)
+        .where('status', isEqualTo: 'ringing')
+        .snapshots()
+        .asyncMap((snapshot) async {
+          if (snapshot.docs.isEmpty) return null;
+          final doc = snapshot.docs.first;
+          final data = Map<String, dynamic>.from(doc.data());
+          if (data['createdAt'] is Timestamp) {
+            data['createdAt'] = (data['createdAt'] as Timestamp).toDate();
+          }
+          return {'id': doc.id, ...data};
+        });
+  }
+
+  Future<void> endCall(String chatId) async {
+    await updateCallStatus(chatId, 'ended');
   }
 
   FirebaseAuth get auth => _auth;

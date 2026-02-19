@@ -47,6 +47,9 @@ class UserModel with _$UserModel {
     // Pause / Incognito – hide profile from discovery
     @Default(false) bool isPaused,
     @Default(false) bool isIncognito,
+
+    // Face verification (FaceTec)
+    @Default(false) bool faceVerified,
   }) = _UserModel;
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -58,6 +61,7 @@ class UserModel with _$UserModel {
     }
     data['isPaused'] ??= false;
     data['isIncognito'] ??= false;
+    data['faceVerified'] ??= false;
     if (data['birthday'] is Timestamp) {
       data['birthday'] =
           (data['birthday'] as Timestamp).toDate().toIso8601String();

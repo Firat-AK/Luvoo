@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		0A221DABBEBBD86A90F101E4 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BB110A5EB557D0959A13BD72 /* Pods_RunnerTests.framework */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
-		18D600F9A3C6D9BD8E0606B4 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 44CB1D18585E34C7627FB00D /* Pods_Runner.framework */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
@@ -17,6 +16,10 @@
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		C044789FCDB3F43ABBE14487 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 96CF832B8008723EB4FD39B5 /* GoogleService-Info.plist */; };
+		F3A94E9D2F3D703900907DCB /* FaceTecSDK.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = F3A94E9C2F3D703900907DCB /* FaceTecSDK.xcframework */; };
+		F3A94E9E2F3D703900907DCB /* FaceTecSDK.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F3A94E9C2F3D703900907DCB /* FaceTecSDK.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F3A94E9F2F3D704300907DCB /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 44CB1D18585E34C7627FB00D /* Pods_Runner.framework */; };
+		F3A94EA02F3D704300907DCB /* Pods_Runner.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 44CB1D18585E34C7627FB00D /* Pods_Runner.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,6 +39,8 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
+				F3A94EA02F3D704300907DCB /* Pods_Runner.framework in Embed Frameworks */,
+				F3A94E9E2F3D703900907DCB /* FaceTecSDK.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -68,6 +73,7 @@
 		ACF0FC0D1C49210E98CADC42 /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
 		BB110A5EB557D0959A13BD72 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F338D69B2F39969200AE8D5F /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
+		F3A94E9C2F3D703900907DCB /* FaceTecSDK.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = FaceTecSDK.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -83,7 +89,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				18D600F9A3C6D9BD8E0606B4 /* Pods_Runner.framework in Frameworks */,
+				F3A94E9F2F3D704300907DCB /* Pods_Runner.framework in Frameworks */,
+				F3A94E9D2F3D703900907DCB /* FaceTecSDK.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -101,6 +108,7 @@
 		396440F0F8595BE26DEF12B9 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				F3A94E9C2F3D703900907DCB /* FaceTecSDK.xcframework */,
 				44CB1D18585E34C7627FB00D /* Pods_Runner.framework */,
 				BB110A5EB557D0959A13BD72 /* Pods_RunnerTests.framework */,
 			);
