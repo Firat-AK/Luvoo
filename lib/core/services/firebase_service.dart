@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -315,7 +316,7 @@ class FirebaseService {
 
   Future<String> uploadProfileImage(String userId, File image) async {
     try {
-      final ref = _storage.ref().child('profile_images/$userId.jpg');
+      final ref = _storage.ref().child('profile_images/$userId/0.jpg');
       await ref.putFile(image);
       return await ref.getDownloadURL();
     } catch (e) {
@@ -323,8 +324,40 @@ class FirebaseService {
     }
   }
 
+  /// Upload selfie for face verification (match with profile photos). Returns download URL.
+  Future<String> uploadSelfieForVerification(String userId, File image) async {
+    try {
+      final path = 'face_verification/$userId/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final ref = _storage.ref().child(path);
+      await ref.putFile(image);
+      return await ref.getDownloadURL();
+    } catch (e) {
+      throw Exception('Failed to upload selfie: $e');
+    }
+  }
+
+  /// Call backend to compare selfie with user's profile photos (Azure Face API). Returns { match: bool, error?: string }.
+  Future<Map<String, dynamic>> verifyFaceWithPhotos({
+    required String userId,
+    required String selfieDownloadUrl,
+  }) async {
+    final callable = FirebaseFunctions.instance.httpsCallable('verifyFaceWithPhotos');
+    final result = await callable.call<Map<String, dynamic>>({
+      'userId': userId,
+      'selfieDownloadUrl': selfieDownloadUrl,
+    });
+    return Map<String, dynamic>.from(result.data ?? {});
+  }
+
+  /// FaceTec 3D:2D Profile Pic: compare enrolled FaceMap (from liveness) with user's profile photos. Returns { match: bool, error?: string }.
+  Future<Map<String, dynamic>> verifyFaceTecProfilePics(String userId) async {
+    final callable = FirebaseFunctions.instance.httpsCallable('verifyFaceTecProfilePics');
+    final result = await callable.call<Map<String, dynamic>>({'userId': userId});
+    return Map<String, dynamic>.from(result.data ?? {});
+  }
+
   /// Upload multiple profile images. Returns list of download URLs.
-  /// Max 6 photos. Uses profile_images/{userId}_{index}.jpg
+  /// Max 6 photos. Path: profile_images/{userId}/{index}.jpg
   Future<List<String>> uploadProfileImages(String userId, List<File> images) async {
     if (images.isEmpty) return [];
     if (images.length > 6) images = images.sublist(0, 6);
@@ -332,7 +365,7 @@ class FirebaseService {
     final urls = <String>[];
     for (var i = 0; i < images.length; i++) {
       try {
-        final ref = _storage.ref().child('profile_images/${userId}_$i.jpg');
+        final ref = _storage.ref().child('profile_images/$userId/$i.jpg');
         await ref.putFile(images[i]);
         urls.add(await ref.getDownloadURL());
       } catch (e) {
@@ -435,6 +468,21 @@ class FirebaseService {
   /// Update only the user's location (for quick updates without full profile save).
   Future<void> updateUserFields(String userId, Map<String, dynamic> data) async {
     await _firestore.collection('users').doc(userId).update(data);
+  }
+
+  /// Fetch a fresh Agora RTC token for the given channel (and optional uid). Use this instead of static token.
+  Future<String> getAgoraToken(String channelId, {int? uid}) async {
+    final callable = FirebaseFunctions.instance.httpsCallable('getAgoraToken');
+    final result = await callable.call<Map<String, dynamic>>({
+      'channelId': channelId,
+      if (uid != null) 'uid': uid,
+    });
+    final data = result.data;
+    final token = data?['token'] as String?;
+    if (token == null || token.isEmpty) {
+      throw Exception('No token returned from getAgoraToken');
+    }
+    return token;
   }
 
   Future<void> updateUserLocation(String userId, double latitude, double longitude) async {

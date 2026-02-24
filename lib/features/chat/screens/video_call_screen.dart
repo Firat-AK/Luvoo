@@ -59,8 +59,21 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
     }
     _error = null;
 
-    // DEBUG: channel = chatId; token in AgoraConfig must be for this channel
     debugPrint('[VideoCall] Joining channel — chatId: ${widget.chatId}');
+
+    final uid = _agoraService.uidFromUserId(currentUser.id);
+    String token;
+    try {
+      token = await ref.read(firebaseServiceProvider).getAgoraToken(widget.chatId, uid: uid);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Could not get call token. Make sure Agora is configured in Firebase (AGORA_APP_ID, AGORA_APP_CERTIFICATE). $e';
+          _isJoining = false;
+        });
+      }
+      return;
+    }
 
     _callSubscription = ref
         .read(firebaseServiceProvider)
@@ -73,7 +86,6 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
 
     try {
       await _agoraService.initialize();
-      final uid = _agoraService.uidFromUserId(currentUser.id);
 
       _agoraService.engine.registerEventHandler(
         RtcEngineEventHandler(
@@ -111,6 +123,7 @@ class _VideoCallScreenState extends ConsumerState<VideoCallScreen> {
       await _agoraService.joinChannel(
         channelId: widget.chatId,
         uid: uid,
+        token: token,
       );
       // Show local video immediately (preview already started in joinChannel)
       if (mounted) {

@@ -17,33 +17,52 @@ class _FaceVerificationScreenState extends ConsumerState<FaceVerificationScreen>
   bool _isVerifying = false;
   String? _message;
 
-  Future<void> _verifyFace() async {
+  Future<void> _runVerification() async {
+    final userId = ref.read(authProvider).value?.id;
+    if (userId == null) {
+      setState(() => _message = 'Not logged in');
+      return;
+    }
+
     setState(() {
       _isVerifying = true;
       _message = null;
     });
+
     try {
-      final result = await FaceTecService().verifyLiveness();
+      // 1) FaceTec 3D Liveness (session goes to our backend with userId → 3D Enrollment)
+      final result = await FaceTecService().verifyLiveness(userId: userId);
       if (!mounted) return;
-      if (result.success) {
-        final userId = ref.read(authProvider).value?.id;
-        if (userId != null) {
-          await ref.read(firebaseServiceProvider).updateUserFields(userId, {'faceVerified': true});
-        }
+      if (!result.success) {
         setState(() {
           _isVerifying = false;
-          _message = 'Face verified successfully!';
+          _message = result.error ?? 'Verification failed or was cancelled.';
         });
+        return;
+      }
+
+      // 2) Match enrolled FaceMap with profile photos (FaceTec 3D:2D Profile Pic)
+      if (mounted) {
+        setState(() => _message = 'Checking your profile photos...');
+      }
+      final matchResult = await ref.read(firebaseServiceProvider).verifyFaceTecProfilePics(userId);
+      if (!mounted) return;
+
+      if (matchResult['match'] == true) {
+        await ref.read(firebaseServiceProvider).updateUserFields(userId, {'faceVerified': true});
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Face verified!'), backgroundColor: Colors.green),
+            const SnackBar(
+              content: Text('Face verified! Your face matches your profile photos.'),
+              backgroundColor: Colors.green,
+            ),
           );
           context.pop();
         }
       } else {
         setState(() {
           _isVerifying = false;
-          _message = result.error ?? 'Verification failed or was cancelled.';
+          _message = matchResult['error'] as String? ?? 'Face does not match your profile photos.';
         });
       }
     } catch (e) {
@@ -97,8 +116,7 @@ class _FaceVerificationScreenState extends ConsumerState<FaceVerificationScreen>
               ),
               const SizedBox(height: 12),
               Text(
-                'Verify your identity with a quick selfie. '
-                'FaceTec will ensure you\'re a real person.',
+                'Prove you\'re a real person with 3D liveness, then we\'ll match your face to your profile photos. No selfie needed.',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.8),
                   fontSize: 16,
@@ -116,7 +134,7 @@ class _FaceVerificationScreenState extends ConsumerState<FaceVerificationScreen>
                   ),
                 ),
               ElevatedButton(
-                onPressed: _isVerifying ? null : _verifyFace,
+                onPressed: _isVerifying ? null : _runVerification,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorScheme.primary,
                   foregroundColor: colorScheme.onPrimary,
@@ -132,7 +150,7 @@ class _FaceVerificationScreenState extends ConsumerState<FaceVerificationScreen>
                           strokeWidth: 2,
                         ),
                       )
-                    : const Text('Start Verification'),
+                    : const Text('Start verification'),
               ),
             ],
           ),

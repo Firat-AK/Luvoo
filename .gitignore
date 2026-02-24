@@ -94,3 +94,6 @@ coverage/
 # Temporary files
 *.tmp
 *.temp
+
+# Node / Cloud Functions
+functions/node_modules/

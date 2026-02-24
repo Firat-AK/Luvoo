@@ -1,11 +1,20 @@
 rules_version = '2';
-// Firebase Storage: profile photos + chat message images
+// Firebase Storage: profile photos + chat message images + face verification selfies
 service firebase.storage {
   match /b/{bucket}/o {
-    // Profile images – only the user can write their own
-    match /profile_images/{userId}/{allPaths=**} {
+    // Profile images – path: profile_images/{userId}/{filename} (new)
+    match /profile_images/{userId}/{fileName} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Legacy profile images: profile_images/userId_0.jpg (read-only for existing URLs)
+    match /profile_images/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+    // Face verification selfies – path: face_verification/{userId}/{filename}
+    match /face_verification/{userId}/{fileName} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     // Chat images – any authenticated user (app ensures chat membership)
     match /chats/{chatId}/messages/{messageId} {
